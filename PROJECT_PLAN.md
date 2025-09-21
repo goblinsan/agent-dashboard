@@ -1,6 +1,6 @@
 # Project Plan: AI Agent Dashboard
 
-Last Updated: 2025-09-21T12:40:00Z
+Last Updated: 2025-09-21T15:05:00Z
 Auto-Refresh Directive: After any task moves to Done, the responsible agent MUST (a) update status fields, (b) add emergent follow-up tasks, (c) prune obsolete tasks, and (d) refresh the Logical Next Steps section timestamp.
 
 ## 1. Vision & High-Level Goal
@@ -39,189 +39,64 @@ An operational backend + minimal UI (or structured API endpoints) enabling:
 4. Optimize for clarity > cleverness.
 5. Treat personas as living contracts; update when drift detected.
 
-## 2. Phase Breakdown
-Phases build cumulatively; only promote scope when acceptance criteria met.
+## 2. Phase Breakdown (Condensed)
+Phases 0–4 are COMPLETE and collectively constitute the MVP. Detailed task tables have been archived; below are concise summaries preserving institutional knowledge while keeping this plan lean.
 
-### Phase 0: Foundations & Repo Hygiene
-Purpose: Establish baseline structure, documentation, and simple runtime.
+### Completed Phases (Summary)
+| Phase | Focus | Key Deliverables | Notes |
+|-------|-------|------------------|-------|
+| 0 | Foundations & Hygiene | Plan, personas, prioritization rubric, health endpoints, audit scaffold, shared types, ADR template | Established baseline repo discipline |
+| 1 | Core Task & Bug API | Task CRUD + transitions, Bug CRUD, optimistic concurrency, error envelope, initial OpenAPI, audit retention | Proved vertical slice for work tracking |
+| 2 | Status Updates & Design Notes | StatusUpdate + DesignNote entities, pagination (limit/since/offset), Bug PATCH + version, CI workflow, dependency audit, persistence strategy ADR | Expanded collaboration primitives |
+| 3 | Persistence & Lifecycle | Optional SQLite, migrations, soft delete + restore, export/import, role middleware flag, full repo parity | Enabled durability & reversible deletes |
+| 4 | Minimal Dashboard UI | Static HTML dashboard: tasks/bugs/updates lists, create task, submit status update, polling refresh, restore endpoints in spec | Human visibility + faster iteration |
 
-Acceptance Criteria:
-1. Project plan (this file) populated and timestamped.
-2. Prioritization rubric committed.
-3. Personas expanded with actionable checklists.
-4. Basic backend server skeleton running (health endpoint).
-5. Task/Bug domain model draft in `shared/types`.
+MVP Status: ✅ COMPLETE (all exit criteria satisfied; further changes tracked as enhancements and do not reopen MVP scope).
 
-#### Task Tracker (Phase 0)
-| ID | Task | Owner | Status | Priority | ETA | Notes |
-|----|------|-------|--------|----------|-----|-------|
-| P0-1 | Expand project plan scaffold | PM | Done | High | 2025-09-20 | Initial commit |
-| P0-2 | Update prioritization rubric | PM | Done | High | 2025-09-20 | MVP focus wording applied |
-| P0-3 | Flesh out personas | PM | Done | High | 2025-09-20 | All personas expanded |
-| P0-4 | Define shared type interfaces | Architect | Done | High | 2025-09-20 | Implemented in shared/types |
-| P0-5 | Backend health endpoint | Dev | Done | Medium | 2025-09-20 | `/health` + `/healthz` added |
-| P0-6 | ADR template added | Architect | Done | Low | 2025-09-20 | `docs/adr/ADR-Template.md` |
-| P0-7 | README expansion | PM | Done | Medium | 2025-09-20 | Added quick start & references |
-| P0-8 | Status enum migration plan | Architect | Done | Medium | 2025-09-20 | Implemented; backward compat mapping in server |
-| P0-9 | Introduce audit log scaffold | Dev | Done | Medium | 2025-09-20 | In-memory audit entries + /audit endpoint |
+### Upcoming Enhancement Phases
+| Phase | Theme | Objective | High-Level Outcomes |
+|-------|-------|----------|---------------------|
+| 5 | Observability & Automation | Surface system health & accelerate feedback loops | `/metrics`, counters, latency sampling, anomaly heuristic, daily digest scaffold |
+| 6 | UI Enhancements & UX | Improve usability & reduce context switching | Soft-delete visibility & restore UI, design notes panel, richer task detail, WebSocket push |
+| 7 | Security & Reliability | Harden platform & gate risky changes | Vulnerability severity enforcement, rate limiting, auth expansion, audit persistence decision |
+| 8 | Scale & Data Evolution | Prepare for higher volume & pagination robustness | Cursor pagination, retention policies, hard purge workflow, upsert-aware import |
+| 9 | Collaboration & Extensibility | Integrations & notification pathways | Webhook queue, subscription filters, multi-agent presence, pluggable event hooks |
 
-### Phase 1: MVP Task & Bug CRUD API (Completed)
-Purpose: Provide minimal REST API for tasks and bug reports consumed by agents.
+## 3. Enhancement Backlog (Prioritized)
+Single authoritative backlog. "Priority" uses P0 (near-term), P1 (important), P2 (nice). Phase Target is provisional.
 
-Completion Summary (Phase 1 Achieved):
-- CRUD endpoints for tasks (create, list, status transition) and bugs (create, list) implemented against in-memory repositories.
-- Status transition validation with optimistic concurrency and rationale logging.
-- Standardized response envelope + centralized error handling (all endpoints covered in OpenAPI).
-- OpenAPI spec authored (v0.1.1) with error schemas; publish + lint scripts added.
-- Audit logging with pagination limit and bounded retention (pruning) + ADR-0002.
-- Negative tests (transition rules, version conflict, validation, pruning) added.
-- Repository abstraction decision captured in ADR-0001.
+| ID | Title | Description | Priority | Target Phase | Status |
+|----|-------|------------|----------|--------------|--------|
+| B-1 | Metrics instrumentation | In-memory counters (reqs, errors, latency buckets) | P0 | 5 | Todo |
+| B-2 | `/metrics` endpoint | Expose JSON metrics snapshot | P0 | 5 | Todo |
+| B-3 | Dependency severity gate | Fail CI on high/critical vulns (configurable) | P0 | 7 | Todo |
+| B-4 | Soft-delete UI toggle & restore buttons | Show deleted entities & allow one-click restore | P0 | 6 | Todo |
+| B-5 | Design notes panel | Read-only list (title + decision snippet) | P1 | 6 | Todo |
+| B-6 | WebSocket push refresh | Replace polling for tasks/updates | P1 | 6 | Todo |
+| B-7 | CI SQLite matrix job | Exercise persistent path on CI runner | P1 | 7 | Todo |
+| B-8 | Cursor pagination evaluation | Replace offset for large datasets | P1 | 8 | Todo |
+| B-9 | Audit log persistence decision | Promote audit log to durable store (SQLite table) | P1 | 7 | Todo |
+| B-10 | Upsert-aware import | Preserve original IDs/versions during import | P1 | 8 | Todo |
+| B-11 | Hard purge job | Remove soft-deleted > retention threshold | P2 | 8 | Todo |
+| B-12 | Notification hook scaffold | Webhook queue + retry metadata | P2 | 9 | Todo |
+| B-13 | Daily summary generator | Aggregate last 24h changes | P2 | 5 | Todo |
+| B-14 | Rate limiting middleware | Basic per-key throttle | P2 | 7 | Todo |
+| B-15 | Role expansion matrix | Granular role permissions per endpoint | P2 | 7 | Todo |
+| B-16 | Export format versioning | Add schemaVersion & backward loader | P2 | 8 | Todo |
+| B-17 | Design note edge-case tests | Payload length & validation fuzzing | P2 | 6 | Todo |
+| B-18 | WebSocket auth tightening | Validate API key on upgrade | P2 | 7 | Todo |
+| B-19 | Audit UI surface | Minimal UI page for recent audits | P2 | 6 | Todo |
+| B-20 | Vulnerability diff trend | Track deltas across CI runs | P2 | 7 | Todo |
 
-Deferred / Not Included in Acceptance (moved to Enhancement Backlog):
-- CI OpenAPI lint integration (pipeline enforcement).
-- Bug parity test: version conflict scenario (still desired but not blocking Phase 1 exit).
+Backlog Grooming Rule: After completing any P0/P1 item, reassess next 1–2 items for reprioritization; avoid pulling >2 concurrent P1 efforts.
 
-Phase 1 exit criteria satisfied; promoting focus to Phase 2.
+## 4. Phase 5 Preview (Observability & Automation)
+Initial slice will implement B-1 & B-2 (metrics & endpoint) plus optional lightweight error anomaly heuristic (sliding window error ratio). Remaining automation (digest, notification) deferred until metrics stable.
 
-### Enhancement Backlog (Deferred Items)
-| ID | Item | Rationale | Status | Notes |
-|----|------|----------|--------|-------|
-| EB-1 | CI OpenAPI lint (former P1-16) | Enforce spec quality in CI | Todo | Add GitHub Action using `npm run ci:verify` |
-| EB-2 | Bug version conflict test parity | Strengthen reliability | Todo | Mirror task test case |
-| EB-3 | Metrics instrumentation design doc | Prep for Phase 4 | Todo | Lightweight design outline |
-| EB-4 | Dependency scan script enhancement | Security posture | Todo | Produce artifact file |
+---
 
-### Phase 2: Status Updates & Design Notes
-Purpose: Enable periodic status pings and design docs for alignment.
-
-Acceptance Criteria:
-1. `StatusUpdate` entity linked to Task or global context.
-2. API endpoints for posting/fetching updates.
-3. Design note (ADR-lite) creation with rationale + decision.
-4. Agents can query last N updates.
-5. Basic pagination (limit + since; later offset added for reverse chronological windows).
-6. (Enhanced) Offset pagination for status updates & design notes (added).
-7. Bug optimistic concurrency parity (PATCH with versioning) incorporated for consistency.
-8. CI workflow running build/test/lint/spec publish.
-9. Dependency audit JSON artifact produced.
-
-Phase 2 Completion Summary (Achieved):
-- StatusUpdate + DesignNote endpoints with validation, audit logging, and tests delivered.
-- Pagination: initial limit + since (status updates) extended with offset for both updates and notes (OpenAPI 0.3.1).
-- Bug PATCH endpoint with optimistic concurrency (version field) added; OpenAPI 0.3.2 updated.
-- README expanded with PATCH usage & pagination model.
-- CI GitHub Action (`ci.yml`) executes `ci:verify` + artifacts (OpenAPI + audit-report.json).
-- Dependency scan script produces normalized `audit-report.json` (included in CI artifacts).
-- Persistence strategy documented (ADR-0003) preparing Phase 3.
-
-#### Task Tracker (Phase 2)
-| ID | Task | Owner | Status | Priority | ETA | Notes |
-|----|------|-------|--------|----------|-----|-------|
-| P2-1 | Define StatusUpdate schema | Architect | Done | High | 2025-09-20 | Implemented in shared/types |
-| P2-2 | Implement updates endpoints | Dev | Done | High | 2025-09-20 | Endpoints + tests |
-| P2-3 | ADR-lite creation endpoint | Dev | Done | Medium | 2025-09-20 | Design notes implemented |
-| P2-4 | Pagination & filters (limit+since+offset) | Dev | Done | Medium | 2025-09-21 | Offset added (0.3.1) |
-| P2-5 | Update docs & examples | PM | Done | Low | 2025-09-21 | README & OpenAPI revision |
-| P2-6 | Bug PATCH optimistic concurrency | Dev | Done | High | 2025-09-21 | Versioned bug updates (0.3.2) |
-| P2-7 | CI pipeline integration | DevOps | Done | High | 2025-09-21 | GitHub Actions added |
-| P2-8 | Dependency audit artifact | Security | Done | Medium | 2025-09-21 | `audit-report.json` produced |
-
-### Enhancement Backlog (Deferred / Post-Phase 2)
-| ID | Item | Rationale | Status | Notes |
-|----|------|----------|--------|-------|
-| EB-1 | Cursor-based pagination evaluation | Stability & large datasets | Todo | Replace offset once persistence lands |
-| EB-2 | Design note edge-case tests (length bounds, invalid payloads) | Robustness | Todo | Expand test coverage |
-| EB-3 | Metrics instrumentation design doc | Prep Phase 4 | Todo | Outline counters & timers |
-| EB-4 | Enforcement of high/critical vuln fail threshold | Security gating | Todo | Post-process audit JSON |
-| EB-5 | Export/import data script (pre-persistence) | Data portability | Todo | Supports Phase 3 migration |
-
-### Phase 3: Persistence, Authorization & Archival (Completed)
-Purpose: Introduce durable optional persistence, role-based guardrails (experimental), data portability, and reversible archival (soft delete + restore).
-
-Completion Summary:
-| Capability | Status | Notes |
-|------------|--------|-------|
-| SQLite adapter (better-sqlite3) | Done | Optional; seamless fallback to in-memory |
-| Migration system | Done | `migrations/*.sql` with `_migrations` ledger |
-| Full repository parity (all entities) | Done | Tasks, Bugs, StatusUpdates, DesignNotes |
-| Conditional SQLite integration tests | Done | Skips gracefully if driver missing |
-| Role-based authorization middleware | Done (experimental) | Guard on design note creation when `ENFORCE_ROLES=1` |
-| Export script | Done | JSON snapshot export (`npm run data:export`) |
-| Import script | Done | Rehydrates from snapshot (`npm run data:import`) |
-| Soft delete (tasks, bugs, design notes) | Done | `deleted_at` (SQLite) / `deletedAt` (in-memory) + filtering |
-| Restore endpoints | Done | `POST /:entity/:id/restore` + audit `restored` action |
-| Audit log retention policy | Done | Bounded in-memory with pruning (ADR-0002) |
-| CI resilience for optional driver | Done | `migrate:if-present` avoids pipeline failures |
-| CI matrix with explicit SQLite build | Deferred | Future improvement |
-| Audit log persistence table | Deferred | Decision deferred; ephemeral acceptable for MVP |
-
-Phase 3 Exit Rationale: All persistence and data lifecycle primitives required for MVP have landed; remaining deferred items do not block a minimal usable product.
-
-#### Task Tracker (Phase 3)
-| ID | Task | Owner | Status | Priority | Notes |
-|----|------|-------|--------|----------|-------|
-| P3-1 | Select persistence adapter (SQLite-first) | Architect | Done | High | ADR-0003 drafted |
-| P3-2 | Initial migration + schema baseline | Dev | Done | High | 0001_initial + 0002_soft_delete applied |
-| P3-3 | Task & Bug SQLite repos | Dev | Done | High | Optimistic concurrency parity maintained |
-| P3-4 | StatusUpdate & DesignNote SQLite repos | Dev | Done | Medium | Full entity coverage |
-| P3-5 | Conditional SQLite integration tests | QA | Done | Medium | Skips when driver missing |
-| P3-6 | Optional dependency handling | Dev | Done | Medium | `optionalDependencies` + runtime detection |
-| P3-7 | Export data script | Dev | Done | High | `npm run data:export` |
-| P3-8 | Import data script | Dev | Done | High | `npm run data:import` |
-| P3-9 | Role validation middleware | Dev | Done | Medium | `ENFORCE_ROLES` flag gating |
-| P3-10 | Soft delete support | Dev | Done | Medium | Delete & restore endpoints implemented |
-| P3-11 | CI SQLite matrix job | DevOps | Deferred | Medium | Post-MVP hardening |
-| P3-12 | Audit log persistence decision | Architect | Deferred | Low | Re-evaluate post-MVP |
-
-### Phase 4: Minimal Dashboard UI (Completed)
-Purpose: Provide a lightweight browser-accessible dashboard to visualize and (minimally) create data without external tools—unlocking stakeholder visibility and faster iteration.
-
-Acceptance Criteria (MVP Surface Slice):
-1. Static HTML (`public/index.html`) served from backend root.
-2. API key input (stored in `localStorage`) appended as `x-api-key` for all fetches.
-3. Read-only lists: Tasks (title, status, priority), Bugs (title, severity), Status Updates (message, relative time).
-4. Automatic refresh (poll every ≤10s) OR WebSocket if trivial to hook—polling acceptable for MVP.
-5. Minimal styling (readable layout) with zero build tooling (vanilla JS + inline CSS acceptable).
-6. Basic error banner if auth fails (invalid/expired API key).
-
-Stretch (Post-MVP for this phase):
-- Create Task form (title + optional priority) with optimistic refresh.
-- Soft-deleted visibility toggle + restore action button.
-- Design Notes list (truncated context & decision).
-- WebSocket upgrade for push updates.
-
-#### Task Tracker (Phase 4)
-| ID | Task | Owner | Status | Priority | Notes |
-|----|------|-------|--------|----------|-------|
-| P4-1 | Serve static dashboard (`public/`) | Dev | Done | High | Implemented static middleware + index.html |
-| P4-2 | API key input + storage | Dev | Done | High | localStorage integration in UI |
-| P4-3 | Fetch & render tasks/bugs | Dev | Done | High | Polling every 7s implemented |
-| P4-4 | Render status updates feed | Dev | Done | High | Shows last 20 with relative time |
-| P4-5 | Basic UX & error states | Dev | Done | Medium | Error banner + hint states |
-| P4-6 | README dashboard section | PM | Done | Medium | Added with usage + lifecycle |
-| P4-7 | OpenAPI update (restore endpoints) | Dev | Done | Medium | Spec v0.4.0 includes restore + includeDeleted |
-| P4-8 | Create Task form (stretch) | Dev | Done | Medium | Promoted into MVP scope |
-| P4-9 | Status update submission form | Dev | Done | Medium | Added inline form to UI |
-
-### Phase 5: Observability & Automation
-Purpose: (Deferred until after UI MVP) Improve reliability, analytics, and proactive alerts.
-
-
-Acceptance Criteria (to be revisited post Phase 4):
-1. Metrics endpoint (requests, latency, error rate).
-2. Basic anomaly detection heuristic (error rate threshold).
-3. Daily digest generator (summary of latest tasks/bugs/updates).
-4. Notification hook scaffold (webhook queue placeholder).
-5. Performance baseline documented.
-
-#### Task Tracker (Phase 5)
-| ID | Task | Owner | Status | Priority | Notes |
-|----|------|-------|--------|----------|-------|
-| P5-1 | Metrics collection instrumentation | Dev | Todo | Medium | Stats object aggregation |
-| P5-2 | Metrics endpoint `/metrics` | Dev | Todo | Medium | JSON output |
-| P5-3 | Error anomaly heuristic | Dev | Todo | Low | Threshold-based |
-| P5-4 | Daily summary generator | PM | Todo | Low | Aggregates recent updates |
-| P5-5 | Notification hook scaffold | Dev | Todo | Low | Webhook queue placeholder |
+## 5. (Former Sections Renumbered)
+Subsequent sections retain prior numbering intent but have been shifted.
 
 ## 3. Domain Model (Draft)
 | Entity | Key Fields | Notes |
