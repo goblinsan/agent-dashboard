@@ -17,6 +17,8 @@ interface Bug { id: string; title: string; severity: 'low' | 'medium' | 'high' |
 interface Guideline { id: string; category: string; version: number; content: string; updatedAt: number; }
 
 const agents = new Map<string, Agent>();
+// Multi-project groundwork: default project identifier (migration seeds this id in persistence layer)
+export const DEFAULT_PROJECT_ID = 'default';
 // Persistence selection (in-memory default)
 const useSqlite = process.env.PERSISTENCE === 'sqlite';
 let taskRepo: any;
@@ -68,7 +70,7 @@ function pushAudit(entry: { id: string; actor: string; entity: string; entityId:
 // Seed data
 const baseGuideline: Guideline = { id: 'g-base', category: 'general', version: 1, content: 'Initial guidelines. Refer to AGENT_GUIDELINES.md', updatedAt: Date.now() };
 guidelines.set(baseGuideline.id, baseGuideline);
-const sampleTask = taskRepo.create({ title: 'Implement core API' });
+const sampleTask = taskRepo.create({ title: 'Implement core API', projectId: DEFAULT_PROJECT_ID });
 
 const app = express();
 app.use(cors());
@@ -154,7 +156,7 @@ app.get('/tasks', auth, (req: Request, res: Response) => {
 app.post('/tasks', auth, (req: Request, res: Response) => {
   const { title, priority } = req.body || {};
   if (!title) return fail(res, new ApiError('title_required', 400));
-  const task = taskRepo.create({ title, priority });
+  const task = taskRepo.create({ title, priority, projectId: DEFAULT_PROJECT_ID });
   const actor = (req as any).agent?.id || 'system';
   pushAudit({ id: nanoid(10), actor, entity: 'task', entityId: task.id, action: 'created', at: Date.now(), diff: { status: { to: 'todo' } } });
   broadcast({ type: 'task.created', task });
@@ -193,7 +195,7 @@ app.get('/bugs', auth, (req: Request, res: Response) => {
 app.post('/bugs', auth, (req: Request, res: Response) => {
   const parse = bugSchema.safeParse(req.body);
   if (!parse.success) return fail(res, new ApiError('validation_failed', 400, 'validation_failed', parse.error.flatten()));
-  const bug = bugRepo.create({ title: parse.data.title, severity: parse.data.severity, taskId: parse.data.taskId, reproSteps: parse.data.reproSteps, proposedFix: parse.data.proposedFix });
+  const bug = bugRepo.create({ title: parse.data.title, severity: parse.data.severity, taskId: parse.data.taskId, reproSteps: parse.data.reproSteps, proposedFix: parse.data.proposedFix, projectId: DEFAULT_PROJECT_ID });
   broadcast({ type: 'bug.created', bug });
   return ok(res, bug, 201);
 });
@@ -270,7 +272,7 @@ app.post('/status-updates', auth, (req: Request, res: Response) => {
   const parsed = statusUpdateSchema.safeParse(req.body);
   if (!parsed.success) return fail(res, new ApiError('validation_failed', 400, 'validation_failed', parsed.error.flatten()));
   const agent: Agent = (req as any).agent;
-  const update = statusUpdateRepo.create({ actor: agent.id, message: parsed.data.message, taskId: parsed.data.taskId });
+  const update = statusUpdateRepo.create({ actor: agent.id, message: parsed.data.message, taskId: parsed.data.taskId, projectId: DEFAULT_PROJECT_ID });
   pushAudit({ id: nanoid(10), actor: agent.id, entity: 'status_update', entityId: update.id, action: 'created', at: Date.now(), diff: { message: { to: update.message } } });
   broadcast({ type: 'status_update.created', update });
   return ok(res, update, 201);
@@ -298,7 +300,7 @@ app.post('/design-notes', auth, requireRoles(['architect','pm']), (req: Request,
   const parsed = designNoteSchema.safeParse(req.body);
   if (!parsed.success) return fail(res, new ApiError('validation_failed', 400, 'validation_failed', parsed.error.flatten()));
   const agent: Agent = (req as any).agent;
-  const note = designNoteRepo.create({ actor: agent.id, ...parsed.data });
+  const note = designNoteRepo.create({ actor: agent.id, ...parsed.data, projectId: DEFAULT_PROJECT_ID });
   pushAudit({ id: nanoid(10), actor: agent.id, entity: 'design_note', entityId: note.id, action: 'created', at: Date.now(), diff: { title: { to: note.title } } });
   broadcast({ type: 'design_note.created', note });
   return ok(res, note, 201);

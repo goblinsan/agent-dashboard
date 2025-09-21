@@ -2,6 +2,7 @@ import { nanoid } from 'nanoid';
 
 export interface DesignNoteRecord {
   id: string;
+  projectId?: string;
   title: string;
   context: string;
   decision: string;
@@ -23,12 +24,28 @@ export class InMemoryDesignNoteRepository {
   private items: DesignNoteRecord[] = [];
 
   create(input: DesignNoteCreateInput): DesignNoteRecord {
-    const rec: DesignNoteRecord = { id: nanoid(10), createdAt: Date.now(), ...input };
+  const rec: DesignNoteRecord = { id: nanoid(10), projectId: 'default', createdAt: Date.now(), ...input };
     this.items.push(rec);
     return rec;
   }
 
-  list(limit = 50): DesignNoteRecord[] {
-    return this.items.slice(-limit);
+  list(limit = 50, opts?: { includeDeleted?: boolean }): DesignNoteRecord[] {
+    let arr = this.items;
+    if (!opts?.includeDeleted) arr = arr.filter(i => !(i as any).deletedAt);
+    return arr.slice(-limit);
+  }
+  getById(id: string, includeDeleted = false): DesignNoteRecord | undefined {
+    const dn = this.items.find(i => i.id === id);
+    if (!dn) return;
+    if (!includeDeleted && (dn as any).deletedAt) return;
+    return dn;
+  }
+  softDelete(id: string) {
+    const dn = this.items.find(i => i.id === id);
+    if (dn && !(dn as any).deletedAt) (dn as any).deletedAt = Date.now();
+  }
+  restore(id: string) {
+    const dn = this.items.find(i => i.id === id);
+    if (dn && (dn as any).deletedAt) delete (dn as any).deletedAt;
   }
 }

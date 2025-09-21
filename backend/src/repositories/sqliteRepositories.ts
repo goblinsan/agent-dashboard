@@ -11,23 +11,33 @@ function parseJson<T>(v: any, fallback: T): T {
 
 export class SqliteTaskRepository {
   private db = getDb();
-  create(data: { title: string; priority?: string }): Task {
+  create(data: { title: string; priority?: string; projectId?: string }): Task {
     const id = 'T-' + Math.random().toString(36).slice(2,8);
     const ts = now();
-    const task: Task = { id, title: data.title, status: 'todo', version: 1, assignees: [], priority: data.priority as any, rationaleLog: [], createdAt: ts, updatedAt: ts } as Task;
-    this.db.prepare(`INSERT INTO tasks (id,title,status,version,priority,assignees,rationale_log,created_at,updated_at) VALUES (?,?,?,?,?,?,?, ?, ?)`)
-      .run(task.id, task.title, task.status, task.version, task.priority || null, JSON.stringify(task.assignees), JSON.stringify(task.rationaleLog), task.createdAt, task.updatedAt);
+    const projectId = (data as any).projectId || 'default';
+    const task: Task = { id, projectId, title: data.title, status: 'todo', version: 1, assignees: [], priority: data.priority as any, rationaleLog: [], createdAt: ts, updatedAt: ts } as Task;
+    // Attempt insert with project_id if column exists; fallback silently if not (pre-migration runtime)
+    try {
+      this.db.prepare(`INSERT INTO tasks (id,title,status,version,priority,assignees,rationale_log,created_at,updated_at,project_id) VALUES (?,?,?,?,?,?,?,?,?,?)`)
+        .run(task.id, task.title, task.status, task.version, task.priority || null, JSON.stringify(task.assignees), JSON.stringify(task.rationaleLog), task.createdAt, task.updatedAt, projectId);
+    } catch {
+      this.db.prepare(`INSERT INTO tasks (id,title,status,version,priority,assignees,rationale_log,created_at,updated_at) VALUES (?,?,?,?,?,?,?, ?, ?)`)
+        .run(task.id, task.title, task.status, task.version, task.priority || null, JSON.stringify(task.assignees), JSON.stringify(task.rationaleLog), task.createdAt, task.updatedAt);
+    }
     return task;
   }
-  getById(id: string): Task | undefined {
-    const row = this.db.prepare('SELECT * FROM tasks WHERE id=?').get(id);
+  getById(id: string, includeDeleted = false): Task | undefined {
+    const row = this.db.prepare(`SELECT * FROM tasks WHERE id=?${includeDeleted ? '' : ' AND deleted_at IS NULL'}`).get(id);
     if (!row) return;
     return this.map(row);
   }
-  list(filter?: { status?: Task['status'] }): Task[] {
+  list(filter?: { status?: Task['status']; includeDeleted?: boolean }): Task[] {
     let sql = 'SELECT * FROM tasks';
     const params: any[] = [];
-    if (filter?.status) { sql += ' WHERE status=?'; params.push(filter.status); }
+    const clauses: string[] = [];
+    if (filter?.status) { clauses.push('status=?'); params.push(filter.status); }
+    if (!filter?.includeDeleted) { clauses.push('deleted_at IS NULL'); }
+    if (clauses.length) sql += ' WHERE ' + clauses.join(' AND ');
   const rows: any[] = this.db.prepare(sql).all(...params);
   return rows.map((r: any) => this.map(r));
   }
@@ -37,28 +47,37 @@ export class SqliteTaskRepository {
       task.title, task.status, task.version, task.priority || null, JSON.stringify(task.assignees), JSON.stringify(task.rationaleLog), task.updatedAt, task.id
     );
   }
+  softDelete(id: string) { this.db.prepare('UPDATE tasks SET deleted_at=? WHERE id=? AND deleted_at IS NULL').run(Date.now(), id); }
+  restore(id: string) { this.db.prepare('UPDATE tasks SET deleted_at=NULL WHERE id=?').run(id); }
   private map(r: any): Task {
-    return { id: r.id, title: r.title, status: r.status, version: r.version, assignees: parseJson<string[]>(r.assignees, []), priority: r.priority || undefined, rationaleLog: parseJson<string[]>(r.rationale_log, []), createdAt: r.created_at, updatedAt: r.updated_at } as Task;
+    return { id: r.id, projectId: r.project_id || 'default', title: r.title, status: r.status, version: r.version, assignees: parseJson<string[]>(r.assignees, []), priority: r.priority || undefined, rationaleLog: parseJson<string[]>(r.rationale_log, []), createdAt: r.created_at, updatedAt: r.updated_at, deletedAt: r.deleted_at || undefined } as Task;
   }
 }
 
 export class SqliteBugRepository {
   private db = getDb();
-  create(data: { title: string; severity: 'low'|'medium'|'high'|'critical'; reproSteps: string[]; taskId?: string; proposedFix?: string }): BugReport {
+  create(data: { title: string; severity: 'low'|'medium'|'high'|'critical'; reproSteps: string[]; taskId?: string; proposedFix?: string; projectId?: string }): BugReport {
     const id = 'B-' + Math.random().toString(36).slice(2,8);
     const ts = now();
-    const bug: BugReport = { id, title: data.title, severity: data.severity, description: undefined, status: 'open', linkedTaskIds: data.taskId ? [data.taskId] : [], reproSteps: data.reproSteps, proposedFix: data.proposedFix, createdAt: ts, updatedAt: ts, reporter: undefined, version: 1 } as BugReport;
-    this.db.prepare(`INSERT INTO bugs (id,title,severity,status,repro_steps,proposed_fix,linked_task_ids,version,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)`).run(
-      bug.id, bug.title, bug.severity, bug.status, JSON.stringify(bug.reproSteps), bug.proposedFix || null, JSON.stringify(bug.linkedTaskIds), bug.version, bug.createdAt, bug.updatedAt
-    );
+    const projectId = (data as any).projectId || 'default';
+    const bug: BugReport = { id, projectId, title: data.title, severity: data.severity, description: undefined, status: 'open', linkedTaskIds: data.taskId ? [data.taskId] : [], reproSteps: data.reproSteps, proposedFix: data.proposedFix, createdAt: ts, updatedAt: ts, reporter: undefined, version: 1 } as BugReport;
+    try {
+      this.db.prepare(`INSERT INTO bugs (id,title,severity,status,repro_steps,proposed_fix,linked_task_ids,version,created_at,updated_at,project_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)`).run(
+        bug.id, bug.title, bug.severity, bug.status, JSON.stringify(bug.reproSteps), bug.proposedFix || null, JSON.stringify(bug.linkedTaskIds), bug.version, bug.createdAt, bug.updatedAt, projectId
+      );
+    } catch {
+      this.db.prepare(`INSERT INTO bugs (id,title,severity,status,repro_steps,proposed_fix,linked_task_ids,version,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)`).run(
+        bug.id, bug.title, bug.severity, bug.status, JSON.stringify(bug.reproSteps), bug.proposedFix || null, JSON.stringify(bug.linkedTaskIds), bug.version, bug.createdAt, bug.updatedAt
+      );
+    }
     return bug;
   }
-  list(): BugReport[] {
-  const rows: any[] = this.db.prepare('SELECT * FROM bugs').all();
+  list(opts?: { includeDeleted?: boolean }): BugReport[] {
+  const rows: any[] = this.db.prepare(`SELECT * FROM bugs ${opts?.includeDeleted ? '' : 'WHERE deleted_at IS NULL'}`).all();
   return rows.map((r: any) => this.map(r));
   }
-  getById(id: string): BugReport | undefined {
-    const row = this.db.prepare('SELECT * FROM bugs WHERE id=?').get(id);
+  getById(id: string, includeDeleted = false): BugReport | undefined {
+    const row = this.db.prepare(`SELECT * FROM bugs WHERE id=?${includeDeleted ? '' : ' AND deleted_at IS NULL'}`).get(id);
     if (!row) return;
     return this.map(row);
   }
@@ -68,20 +87,29 @@ export class SqliteBugRepository {
       bug.title, bug.severity, bug.status, JSON.stringify(bug.reproSteps), bug.proposedFix || null, JSON.stringify(bug.linkedTaskIds), bug.version, bug.updatedAt, bug.id
     );
   }
+  softDelete(id: string) { this.db.prepare('UPDATE bugs SET deleted_at=? WHERE id=? AND deleted_at IS NULL').run(Date.now(), id); }
+  restore(id: string) { this.db.prepare('UPDATE bugs SET deleted_at=NULL WHERE id=?').run(id); }
   private map(r: any): BugReport {
-    return { id: r.id, title: r.title, severity: r.severity, status: r.status, reproSteps: parseJson<string[]>(r.repro_steps, []), proposedFix: r.proposed_fix || undefined, linkedTaskIds: parseJson<string[]>(r.linked_task_ids, []), version: r.version, createdAt: r.created_at, updatedAt: r.updated_at } as BugReport;
+    return { id: r.id, projectId: r.project_id || 'default', title: r.title, severity: r.severity, status: r.status, reproSteps: parseJson<string[]>(r.repro_steps, []), proposedFix: r.proposed_fix || undefined, linkedTaskIds: parseJson<string[]>(r.linked_task_ids, []), version: r.version, createdAt: r.created_at, updatedAt: r.updated_at, deletedAt: r.deleted_at || undefined } as BugReport;
   }
 }
 
 export class SqliteStatusUpdateRepository {
   private db = getDb();
-  create(data: { actor: string; message: string; taskId?: string }): StatusUpdate {
+  create(data: { actor: string; message: string; taskId?: string; projectId?: string }): StatusUpdate {
     const id = 'SU-' + Math.random().toString(36).slice(2,10);
     const createdAt = now();
-    this.db.prepare(`INSERT INTO status_updates (id,actor,message,task_id,created_at) VALUES (?,?,?,?,?)`).run(
-      id, data.actor, data.message, data.taskId || null, createdAt
-    );
-    return { id, actor: data.actor, message: data.message, taskId: data.taskId, createdAt } as StatusUpdate;
+    const projectId = (data as any).projectId || 'default';
+    try {
+      this.db.prepare(`INSERT INTO status_updates (id,actor,message,task_id,created_at,project_id) VALUES (?,?,?,?,?,?)`).run(
+        id, data.actor, data.message, data.taskId || null, createdAt, projectId
+      );
+    } catch {
+      this.db.prepare(`INSERT INTO status_updates (id,actor,message,task_id,created_at) VALUES (?,?,?,?,?)`).run(
+        id, data.actor, data.message, data.taskId || null, createdAt
+      );
+    }
+    return { id, projectId, actor: data.actor, message: data.message, taskId: data.taskId, createdAt } as StatusUpdate;
   }
   list(limit = 50, taskId?: string): StatusUpdate[] {
     if (taskId) {
@@ -92,25 +120,34 @@ export class SqliteStatusUpdateRepository {
     return rows.slice(-limit).map(r => this.map(r));
   }
   private map(r: any): StatusUpdate {
-    return { id: r.id, actor: r.actor, message: r.message, taskId: r.task_id || undefined, createdAt: r.created_at } as StatusUpdate;
+    return { id: r.id, projectId: r.project_id || 'default', actor: r.actor, message: r.message, taskId: r.task_id || undefined, createdAt: r.created_at } as StatusUpdate;
   }
 }
 
 export class SqliteDesignNoteRepository {
   private db = getDb();
-  create(data: { title: string; context: string; decision: string; consequences: string; actor: string }): DesignNote {
+  create(data: { title: string; context: string; decision: string; consequences: string; actor: string; projectId?: string }): DesignNote {
     const id = 'DN-' + Math.random().toString(36).slice(2,10);
     const createdAt = now();
-    this.db.prepare(`INSERT INTO design_notes (id,title,context,decision,consequences,actor,created_at) VALUES (?,?,?,?,?,?,?)`).run(
-      id, data.title, data.context, data.decision, data.consequences, data.actor, createdAt
-    );
-    return { id, title: data.title, context: data.context, decision: data.decision, consequences: data.consequences, actor: data.actor, createdAt } as DesignNote;
+    const projectId = (data as any).projectId || 'default';
+    try {
+      this.db.prepare(`INSERT INTO design_notes (id,title,context,decision,consequences,actor,created_at,project_id) VALUES (?,?,?,?,?,?,?,?)`).run(
+        id, data.title, data.context, data.decision, data.consequences, data.actor, createdAt, projectId
+      );
+    } catch {
+      this.db.prepare(`INSERT INTO design_notes (id,title,context,decision,consequences,actor,created_at) VALUES (?,?,?,?,?,?,?)`).run(
+        id, data.title, data.context, data.decision, data.consequences, data.actor, createdAt
+      );
+    }
+    return { id, projectId, title: data.title, context: data.context, decision: data.decision, consequences: data.consequences, actor: data.actor, createdAt } as DesignNote;
   }
-  list(limit = 50): DesignNote[] {
-    const rows: any[] = this.db.prepare(`SELECT * FROM design_notes ORDER BY created_at ASC`).all();
+  list(limit = 50, opts?: { includeDeleted?: boolean }): DesignNote[] {
+    const rows: any[] = this.db.prepare(`SELECT * FROM design_notes ${opts?.includeDeleted ? '' : 'WHERE deleted_at IS NULL'} ORDER BY created_at ASC`).all();
     return rows.slice(-limit).map(r => this.map(r));
   }
+  softDelete(id: string) { this.db.prepare('UPDATE design_notes SET deleted_at=? WHERE id=? AND deleted_at IS NULL').run(Date.now(), id); }
+  restore(id: string) { this.db.prepare('UPDATE design_notes SET deleted_at=NULL WHERE id=?').run(id); }
   private map(r: any): DesignNote {
-    return { id: r.id, title: r.title, context: r.context, decision: r.decision, consequences: r.consequences, actor: r.actor, createdAt: r.created_at, supersededBy: r.superseded_by || undefined } as DesignNote;
+    return { id: r.id, projectId: r.project_id || 'default', title: r.title, context: r.context, decision: r.decision, consequences: r.consequences, actor: r.actor, createdAt: r.created_at, supersededBy: r.superseded_by || undefined, deletedAt: r.deleted_at || undefined } as DesignNote;
   }
 }

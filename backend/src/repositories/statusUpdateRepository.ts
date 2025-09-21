@@ -2,6 +2,7 @@ import { nanoid } from 'nanoid';
 
 export interface StatusUpdateRecord {
   id: string;
+  projectId?: string;
   actor: string;
   taskId?: string;
   message: string;
@@ -18,7 +19,7 @@ export class InMemoryStatusUpdateRepository {
   private items: StatusUpdateRecord[] = [];
 
   create(input: StatusUpdateCreateInput): StatusUpdateRecord {
-    const record: StatusUpdateRecord = { id: nanoid(10), createdAt: Date.now(), ...input };
+    const record: StatusUpdateRecord = { id: nanoid(10), projectId: 'default', createdAt: Date.now(), ...input };
     this.items.push(record);
     return record;
   }

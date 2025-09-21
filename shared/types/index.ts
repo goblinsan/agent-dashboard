@@ -14,6 +14,7 @@ export type TaskStatus = 'todo' | 'in_progress' | 'blocked' | 'done';
 
 export interface Task {
   id: string;
+  projectId?: string; // multi-project scope (defaults to 'default' until feature fully enforced)
   title: string;
   description?: string;
   status: TaskStatus;
@@ -34,6 +35,7 @@ export type BugStatus = 'open' | 'triaged' | 'in_progress' | 'resolved' | 'close
 
 export interface BugReport {
   id: string;
+  projectId?: string;
   title: string;
   description?: string;
   severity: BugSeverity;
@@ -80,6 +82,7 @@ export interface BugCreateRequest {
 // Status update entity (global or task-scoped)
 export interface StatusUpdate {
   id: string;
+  projectId?: string;
   actor: string; // agent or user id
   taskId?: string; // optional linking (undefined => global/project scope)
   message: string; // concise update text (<= 500 chars recommended)
@@ -89,6 +92,7 @@ export interface StatusUpdate {
 // ADR-lite / design note
 export interface DesignNote {
   id: string;
+  projectId?: string;
   title: string;
   context: string; // problem framing / intent
   decision: string; // chosen approach summary
@@ -101,6 +105,7 @@ export interface DesignNote {
 // Audit log entry for all mutations
 export interface AuditEntry {
   id: string;
+  projectId?: string; // project at time of mutation (undefined => default during backfill window)
   actor: string;
   entityType: 'task' | 'bug' | 'status_update' | 'design_note';
   entityId: string;
@@ -113,3 +118,12 @@ export interface AuditEntry {
 export interface ApiSuccess<T> { success: true; data: T; }
 export interface ApiError { success: false; error: { code: string; message: string; details?: unknown }; }
 export type ApiResponse<T> = ApiSuccess<T> | ApiError;
+
+// Project multi-tenancy (Phase 6)
+export interface Project {
+  id: string; // stable id (e.g. slug or nanoid)
+  name: string;
+  description?: string;
+  createdAt: number; // epoch ms
+  archivedAt?: number; // epoch ms if archived
+}

@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  backend-ci:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - name: Install root deps (workspaces)
+        run: npm install
+        working-directory: .
+      - name: Verify backend
+        run: npm run ci:verify
+      - name: Upload OpenAPI artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: openapi-spec
+          path: backend/dist/openapi-*.yaml
+      - name: Upload dependency audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-audit
+          path: backend/audit-report.json
