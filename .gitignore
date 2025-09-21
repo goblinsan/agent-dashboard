@@ -1,0 +1,41 @@
+# Dependencies
+node_modules/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Build outputs
+dist/
+coverage/
+
+# Caches / build info
+.turbo/
+.eslintcache
+*.tsbuildinfo
+
+# OS / misc
+Thumbs.db
+*.swp
+*.tgz
+
+# Coverage reports variants
+coverage-final.json
+report.[0-9]*.json
+lerna-debug.log*
+
+# Env
+.env
+.env.*
+!.env.example
+
+# Runtime local data (future)
+data/
+!.keep
+
+# Editor
+.vscode/
+.DS_Store
+.idea/
