@@ -14,16 +14,19 @@
     "lint:openapi": "npx spectral lint openapi.yaml",
     "openapi:publish": "node scripts/publish-openapi.cjs",
     "migrate": "node scripts/migrate.cjs",
+    "migrate:if-present": "node scripts/migrate-if-present.cjs",
     "dev:sqlite": "cross-env PERSISTENCE=sqlite npm run migrate && cross-env PERSISTENCE=sqlite npm run dev",
-    "ci:verify": "npm run build && npm run test && npm run lint:openapi && npm run openapi:publish && npm run scan:json && npm run migrate"
+    "ci:verify": "npm run build && npm run test && npm run lint:openapi && npm run openapi:publish && npm run scan:json && npm run migrate:if-present"
   },
   "dependencies": {
-    "better-sqlite3": "^9.4.0",
     "cors": "^2.8.5",
     "express": "^4.19.2",
     "nanoid": "^4.0.2",
     "ws": "^8.18.0",
     "zod": "^3.23.8"
+  },
+  "optionalDependencies": {
+    "better-sqlite3": "^9.4.0"
   },
   "devDependencies": {
     "@stoplight/spectral-cli": "^6.11.1",

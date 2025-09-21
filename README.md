@@ -226,14 +226,14 @@ The script `scripts/dependency-scan.cjs` normalizes `npm audit --json` output in
 Enforcement (e.g., failing on high/critical) can be added later by post-processing this JSON.
 
 ## Persistence (Phase 3 - Experimental)
-Default runtime remains in-memory. Enable SQLite persistence by setting `PERSISTENCE=sqlite` (and running migrations) once native dependency installs successfully.
+Default runtime remains in-memory. SQLite support is OPTIONAL: the native driver `better-sqlite3` is now an `optionalDependency`. If it is not installed (e.g. missing build toolchain), the application seamlessly falls back to in-memory stores.
 
 ### Enabling SQLite
 ```bash
 cd backend
-npm install   # ensure build tools installed (see below)
-npm run migrate
-PERSISTENCE=sqlite npm run dev
+npm install          # installs optional deps (will attempt better-sqlite3)
+npm run migrate      # OR: npm run migrate:if-present (skips if driver missing)
+PERSISTENCE=sqlite npm run dev   # use cross-env on Windows shells
 ```
 Data file defaults to `backend/data/agent-dashboard.db`.
 
@@ -249,10 +249,14 @@ After installing tooling:
 npm rebuild better-sqlite3
 ```
 
-If install fails, the server automatically falls back to in-memory and logs a warning at startup.
+If install fails or you skip installing build tooling, you will see a startup log indicating fallback to in-memory. CI uses `migrate:if-present` so builds are not blocked when the native module is absent.
 
 ### Migrations
-Migrations live in `backend/migrations/*.sql` and are applied by `npm run migrate` which records applied files in `_migrations` table.
+Migrations live in `backend/migrations/*.sql` and are applied by:
+* `npm run migrate` (hard-requires SQLite driver) 
+* `npm run migrate:if-present` (skips gracefully if `better-sqlite3` is not installed)
+
+Applied migrations are recorded in the `_migrations` table.
 
 ### Current Coverage
 Implemented repositories (SQLite): Tasks, Bugs (StatusUpdates & DesignNotes still in-memory until finalized schema adaptation).
