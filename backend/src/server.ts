@@ -26,14 +26,13 @@ let designNoteRepo: any;
 if (useSqlite) {
   try {
     // Dynamic import to avoid runtime error if dependency missing
-    const { SqliteTaskRepository, SqliteBugRepository } = await import('./repositories/sqliteRepositories.js').catch(() => ({} as any));
-    if (SqliteTaskRepository && SqliteBugRepository) {
+    const { SqliteTaskRepository, SqliteBugRepository, SqliteStatusUpdateRepository, SqliteDesignNoteRepository } = await import('./repositories/sqliteRepositories.js').catch(() => ({} as any));
+    if (SqliteTaskRepository && SqliteBugRepository && SqliteStatusUpdateRepository && SqliteDesignNoteRepository) {
       taskRepo = new SqliteTaskRepository();
       bugRepo = new SqliteBugRepository();
-      // For now fall back to in-memory for status updates & design notes until sqlite versions added
-      statusUpdateRepo = new InMemoryStatusUpdateRepository();
-      designNoteRepo = new InMemoryDesignNoteRepository();
-      console.log('[persistence] SQLite enabled');
+      statusUpdateRepo = new SqliteStatusUpdateRepository();
+      designNoteRepo = new SqliteDesignNoteRepository();
+      console.log('[persistence] SQLite enabled (tasks, bugs, status updates, design notes)');
     } else {
       console.warn('[persistence] SQLite requested but repository module unavailable – falling back to in-memory');
       taskRepo = new InMemoryTaskRepository();

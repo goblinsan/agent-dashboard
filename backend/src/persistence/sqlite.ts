@@ -1,8 +1,11 @@
-import Database from 'better-sqlite3';
+// better-sqlite3 is an optionalDependency; declare type lightly and require at runtime.
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+let BetterSqlite: any;
+try { BetterSqlite = require('better-sqlite3'); } catch { /* optional */ }
 import path from 'node:path';
 import fs from 'node:fs';
 
-let db: Database.Database | null = null;
+let db: any | null = null;
 
 export interface SqliteOptions { file?: string; }
 
@@ -11,9 +14,10 @@ export function getDb(opts: SqliteOptions = {}) {
   const file = opts.file || path.join(process.cwd(), 'backend', 'data', 'agent-dashboard.db');
   const dir = path.dirname(file);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  db = new Database(file);
-  db.pragma('journal_mode = WAL');
-  db.pragma('foreign_keys = ON');
+  if (!BetterSqlite) throw new Error('better-sqlite3 not installed');
+  db = new BetterSqlite(file);
+  try { db.pragma('journal_mode = WAL'); } catch {}
+  try { db.pragma('foreign_keys = ON'); } catch {}
   return db;
 }
 
