@@ -31,15 +31,16 @@ export class SqliteTaskRepository {
     if (!row) return;
     return this.map(row);
   }
-  list(filter?: { status?: Task['status']; includeDeleted?: boolean }): Task[] {
+  list(filter?: { status?: Task['status']; includeDeleted?: boolean; projectId?: string }): Task[] {
     let sql = 'SELECT * FROM tasks';
     const params: any[] = [];
     const clauses: string[] = [];
     if (filter?.status) { clauses.push('status=?'); params.push(filter.status); }
     if (!filter?.includeDeleted) { clauses.push('deleted_at IS NULL'); }
+    if (filter?.projectId) { clauses.push('project_id=?'); params.push(filter.projectId); }
     if (clauses.length) sql += ' WHERE ' + clauses.join(' AND ');
-  const rows: any[] = this.db.prepare(sql).all(...params);
-  return rows.map((r: any) => this.map(r));
+    const rows: any[] = this.db.prepare(sql).all(...params);
+    return rows.map((r: any) => this.map(r));
   }
   save(task: Task) {
     task.updatedAt = now();
@@ -72,8 +73,14 @@ export class SqliteBugRepository {
     }
     return bug;
   }
-  list(opts?: { includeDeleted?: boolean }): BugReport[] {
-  const rows: any[] = this.db.prepare(`SELECT * FROM bugs ${opts?.includeDeleted ? '' : 'WHERE deleted_at IS NULL'}`).all();
+  list(opts?: { includeDeleted?: boolean; projectId?: string }): BugReport[] {
+  let sql = 'SELECT * FROM bugs';
+  const clauses: string[] = [];
+  const params: any[] = [];
+  if (!opts?.includeDeleted) clauses.push('deleted_at IS NULL');
+  if (opts?.projectId) { clauses.push('project_id=?'); params.push(opts.projectId); }
+  if (clauses.length) sql += ' WHERE ' + clauses.join(' AND ');
+  const rows: any[] = this.db.prepare(sql).all(...params);
   return rows.map((r: any) => this.map(r));
   }
   getById(id: string, includeDeleted = false): BugReport | undefined {
@@ -111,12 +118,15 @@ export class SqliteStatusUpdateRepository {
     }
     return { id, projectId, actor: data.actor, message: data.message, taskId: data.taskId, createdAt } as StatusUpdate;
   }
-  list(limit = 50, taskId?: string): StatusUpdate[] {
-    if (taskId) {
-      const rows: any[] = this.db.prepare(`SELECT * FROM status_updates WHERE task_id=? ORDER BY created_at ASC`).all(taskId);
-      return rows.slice(-limit).map(r => this.map(r));
-    }
-    const rows: any[] = this.db.prepare(`SELECT * FROM status_updates ORDER BY created_at ASC`).all();
+  list(limit = 50, taskId?: string, opts?: { projectId?: string }): StatusUpdate[] {
+    let sql = 'SELECT * FROM status_updates';
+    const clauses: string[] = [];
+    const params: any[] = [];
+    if (taskId) { clauses.push('task_id=?'); params.push(taskId); }
+    if (opts?.projectId) { clauses.push('project_id=?'); params.push(opts.projectId); }
+    if (clauses.length) sql += ' WHERE ' + clauses.join(' AND ');
+    sql += ' ORDER BY created_at ASC';
+    const rows: any[] = this.db.prepare(sql).all(...params);
     return rows.slice(-limit).map(r => this.map(r));
   }
   private map(r: any): StatusUpdate {
@@ -141,8 +151,15 @@ export class SqliteDesignNoteRepository {
     }
     return { id, projectId, title: data.title, context: data.context, decision: data.decision, consequences: data.consequences, actor: data.actor, createdAt } as DesignNote;
   }
-  list(limit = 50, opts?: { includeDeleted?: boolean }): DesignNote[] {
-    const rows: any[] = this.db.prepare(`SELECT * FROM design_notes ${opts?.includeDeleted ? '' : 'WHERE deleted_at IS NULL'} ORDER BY created_at ASC`).all();
+  list(limit = 50, opts?: { includeDeleted?: boolean; projectId?: string }): DesignNote[] {
+    let sql = 'SELECT * FROM design_notes';
+    const clauses: string[] = [];
+    const params: any[] = [];
+    if (!opts?.includeDeleted) clauses.push('deleted_at IS NULL');
+    if (opts?.projectId) { clauses.push('project_id=?'); params.push(opts.projectId); }
+    if (clauses.length) sql += ' WHERE ' + clauses.join(' AND ');
+    sql += ' ORDER BY created_at ASC';
+    const rows: any[] = this.db.prepare(sql).all(...params);
     return rows.slice(-limit).map(r => this.map(r));
   }
   softDelete(id: string) { this.db.prepare('UPDATE design_notes SET deleted_at=? WHERE id=? AND deleted_at IS NULL').run(Date.now(), id); }

@@ -124,9 +124,68 @@ Error example (invalid transition):
 See `shared/types/index.ts` for `Task`, `BugReport`, `StatusUpdate`, `DesignNote`, and `AuditEntry` definitions.
 
 ## API Specification
-An evolving OpenAPI spec lives at `backend/openapi.yaml` (current: 0.4.0). Keep this file updated with any new endpoints or schema changes before merging functional changes.
+An evolving OpenAPI spec lives at `backend/openapi.yaml` (current: 0.5.0). Keep this file updated with any new endpoints or schema changes before merging functional changes.
 
 Status enum has been migrated to: `todo | in_progress | blocked | done` (legacy `open/completed` still accepted only via query normalization temporarily).
+
+### Multi-Project Support (v0.5.0+)
+The backend now supports isolating data across multiple logical projects.
+
+Core concepts:
+* Every request that creates or lists project-scoped entities (`tasks`, `bugs`, `status-updates`, `design-notes`) can specify a project via the `x-project-id` header.
+* If the header is absent, the implicit project id `default` is used (seeded on startup / via migrations).
+* Archived or unknown project ids return `404` (`project_not_found`).
+* Projects themselves are not auto-deleted; archiving hides them from default listings while preserving data.
+
+Project lifecycle endpoints:
+```bash
+# List active projects
+curl -s -H "x-api-key: $API_KEY" http://localhost:4000/projects | jq
+
+# Include archived projects
+curl -s -H "x-api-key: $API_KEY" "http://localhost:4000/projects?includeArchived=1" | jq
+
+# Create a project (custom id optional)
+curl -s -X POST -H "x-api-key: $API_KEY" -H 'Content-Type: application/json' \
+	-d '{"id":"alpha","name":"Alpha Project","description":"Exploration"}' \
+	http://localhost:4000/projects | jq
+
+# Archive (cannot archive 'default')
+curl -s -X POST -H "x-api-key: $API_KEY" http://localhost:4000/projects/alpha/archive | jq
+
+# Restore
+curl -s -X POST -H "x-api-key: $API_KEY" http://localhost:4000/projects/alpha/restore | jq
+```
+
+Using a specific project for tasks:
+```bash
+# Create task in project 'alpha'
+curl -s -X POST http://localhost:4000/tasks \
+	-H "x-api-key: $API_KEY" -H 'Content-Type: application/json' \
+	-H 'x-project-id: alpha' \
+	-d '{"title":"Alpha scoped task"}' | jq
+
+# List tasks only in 'alpha'
+curl -s -H "x-api-key: $API_KEY" -H 'x-project-id: alpha' http://localhost:4000/tasks | jq
+
+# Listing without header still targets 'default'
+curl -s -H "x-api-key: $API_KEY" http://localhost:4000/tasks | jq
+```
+
+Isolation Guarantee (in-memory & SQLite):
+* Each entity row is tagged with `project_id`.
+* List endpoints filter by the selected project id.
+* Cross-project leakage is prevented by repository-level filtering.
+
+Edge Cases:
+* Supplying an archived project id → `404 not_found` with code `not_found` (message `project_not_found`).
+* Attempting to archive the `default` project → `403 forbidden`.
+* Creating a project with an existing id → `400 validation_failed` (details include `already_exists`).
+
+Future Enhancements:
+* UI project selector dropdown.
+* Optional cross-project aggregate endpoints (e.g., global metrics) with explicit opt-in.
+* Project-level role scoping / permissions.
 
 ### OpenAPI Linting
 Run Spectral against the spec to catch contract issues:

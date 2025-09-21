@@ -5,6 +5,7 @@ import { InMemoryTaskRepository } from './repositories/taskRepository.js';
 import { InMemoryBugRepository } from './repositories/bugRepository.js';
 import { InMemoryStatusUpdateRepository } from './repositories/statusUpdateRepository.js';
 import { InMemoryDesignNoteRepository } from './repositories/designNoteRepository.js';
+import { InMemoryProjectRepository } from './repositories/projectRepository.js';
 import { WebSocketServer, WebSocket } from 'ws';
 import { z } from 'zod';
 
@@ -25,15 +26,25 @@ let taskRepo: any;
 let bugRepo: any;
 let statusUpdateRepo: any;
 let designNoteRepo: any;
+let projectRepo: any;
+
+function ensureProjectRepo() {
+  if (!projectRepo) {
+    projectRepo = new InMemoryProjectRepository();
+  }
+  return projectRepo;
+}
 if (useSqlite) {
   try {
     // Dynamic import to avoid runtime error if dependency missing
     const { SqliteTaskRepository, SqliteBugRepository, SqliteStatusUpdateRepository, SqliteDesignNoteRepository } = await import('./repositories/sqliteRepositories.js').catch(() => ({} as any));
+    const { SqliteProjectRepository } = await import('./repositories/sqliteProjectRepository.js').catch(() => ({} as any));
     if (SqliteTaskRepository && SqliteBugRepository && SqliteStatusUpdateRepository && SqliteDesignNoteRepository) {
       taskRepo = new SqliteTaskRepository();
       bugRepo = new SqliteBugRepository();
       statusUpdateRepo = new SqliteStatusUpdateRepository();
       designNoteRepo = new SqliteDesignNoteRepository();
+      projectRepo = SqliteProjectRepository ? new SqliteProjectRepository() : new InMemoryProjectRepository();
       console.log('[persistence] SQLite enabled (tasks, bugs, status updates, design notes)');
     } else {
       console.warn('[persistence] SQLite requested but repository module unavailable – falling back to in-memory');
@@ -41,6 +52,7 @@ if (useSqlite) {
       bugRepo = new InMemoryBugRepository();
       statusUpdateRepo = new InMemoryStatusUpdateRepository();
       designNoteRepo = new InMemoryDesignNoteRepository();
+      projectRepo = new InMemoryProjectRepository();
     }
   } catch (err) {
     console.warn('[persistence] SQLite initialization failed – using in-memory. Error:', (err as any)?.message);
@@ -54,6 +66,7 @@ if (useSqlite) {
   bugRepo = new InMemoryBugRepository();
   statusUpdateRepo = new InMemoryStatusUpdateRepository();
   designNoteRepo = new InMemoryDesignNoteRepository();
+  projectRepo = new InMemoryProjectRepository();
 }
 const guidelines = new Map<string, Guideline>();
 const auditLog: { id: string; actor: string; entity: string; entityId: string; action: string; at: number; diff?: any }[] = [];
@@ -99,6 +112,16 @@ function auth(req: Request, res: Response, next: NextFunction) {
   next();
 }
 
+// Project selection (header x-project-id optional). Falls back to default.
+function selectProject(req: Request, res: Response, next: NextFunction) {
+  const projId = req.header('x-project-id') || DEFAULT_PROJECT_ID;
+  const repo = ensureProjectRepo();
+  const proj = repo.getById(projId);
+  if (!proj || proj.archivedAt) return fail(res, new ApiError('not_found', 404, 'project_not_found'));
+  (req as any).projectId = projId;
+  next();
+}
+
 // Role enforcement (opt-in via ENFORCE_ROLES=1). Evaluated per-request so tests can toggle env dynamically.
 function requireRoles(allowed: string[]) {
   return (req: Request, res: Response, next: NextFunction) => {
@@ -136,6 +159,13 @@ const bugUpdateSchema = z.object({
   reproSteps: z.array(z.string().min(1)).min(1).optional()
 });
 
+// Project schemas
+const projectCreateSchema = z.object({
+  id: z.string().min(2).max(40).regex(/^[a-zA-Z0-9_-]+$/).optional(),
+  name: z.string().min(3).max(120),
+  description: z.string().max(1000).optional()
+});
+
 // Routes
 app.post('/agents/register', (req: Request, res: Response) => {
   const { name, role } = req.body || {};
@@ -146,17 +176,19 @@ app.post('/agents/register', (req: Request, res: Response) => {
   return ok(res, { id, apiKey });
 });
 
-app.get('/tasks', auth, (req: Request, res: Response) => {
+app.get('/tasks', auth, selectProject, (req: Request, res: Response) => {
   const status = req.query.status as string | undefined;
   const includeDeleted = req.query.includeDeleted === '1';
-  let list = taskRepo.list ? taskRepo.list({ status: status ? status.replace(/^open$/, 'todo').replace(/^completed$/, 'done') : undefined, includeDeleted }) : taskRepo.list();
+  const projectId = (req as any).projectId;
+  const list = taskRepo.list({ status: status ? status.replace(/^open$/, 'todo').replace(/^completed$/, 'done') : undefined, includeDeleted, projectId });
   return ok(res, list);
 });
 
-app.post('/tasks', auth, (req: Request, res: Response) => {
+app.post('/tasks', auth, selectProject, (req: Request, res: Response) => {
   const { title, priority } = req.body || {};
   if (!title) return fail(res, new ApiError('title_required', 400));
-  const task = taskRepo.create({ title, priority, projectId: DEFAULT_PROJECT_ID });
+  const projectId = (req as any).projectId;
+  const task = taskRepo.create({ title, priority, projectId });
   const actor = (req as any).agent?.id || 'system';
   pushAudit({ id: nanoid(10), actor, entity: 'task', entityId: task.id, action: 'created', at: Date.now(), diff: { status: { to: 'todo' } } });
   broadcast({ type: 'task.created', task });
@@ -186,16 +218,18 @@ app.post('/tasks/:id/transition', auth, (req: Request, res: Response) => {
   return ok(res, task);
 });
 
-app.get('/bugs', auth, (req: Request, res: Response) => {
+app.get('/bugs', auth, selectProject, (req: Request, res: Response) => {
   const includeDeleted = req.query.includeDeleted === '1';
+  const projectId = (req as any).projectId;
   if (bugRepo.list.length === 0) return ok(res, []);
-  return ok(res, bugRepo.list({ includeDeleted }));
+  return ok(res, bugRepo.list({ includeDeleted, projectId }));
 });
 
-app.post('/bugs', auth, (req: Request, res: Response) => {
+app.post('/bugs', auth, selectProject, (req: Request, res: Response) => {
   const parse = bugSchema.safeParse(req.body);
   if (!parse.success) return fail(res, new ApiError('validation_failed', 400, 'validation_failed', parse.error.flatten()));
-  const bug = bugRepo.create({ title: parse.data.title, severity: parse.data.severity, taskId: parse.data.taskId, reproSteps: parse.data.reproSteps, proposedFix: parse.data.proposedFix, projectId: DEFAULT_PROJECT_ID });
+  const projectId = (req as any).projectId;
+  const bug = bugRepo.create({ title: parse.data.title, severity: parse.data.severity, taskId: parse.data.taskId, reproSteps: parse.data.reproSteps, proposedFix: parse.data.proposedFix, projectId });
   broadcast({ type: 'bug.created', bug });
   return ok(res, bug, 201);
 });
@@ -257,22 +291,24 @@ const statusUpdateSchema = z.object({
   taskId: z.string().optional()
 });
 
-app.get('/status-updates', auth, (req: Request, res: Response) => {
+app.get('/status-updates', auth, selectProject, (req: Request, res: Response) => {
   const limit = Math.min(Number(req.query.limit) || 50, 200);
   const offset = Math.max(Number(req.query.offset) || 0, 0);
   const taskId = req.query.taskId as string | undefined;
   const since = req.query.since ? Number(req.query.since) : undefined;
-  let list = statusUpdateRepo.list(10000, taskId); // pull full for filter then slice
+  const projectId = (req as any).projectId;
+  let list = statusUpdateRepo.list(10000, taskId, { projectId }); // pull full for filter then slice
   if (since) list = list.filter((u: any) => u.createdAt >= since);
   const window = list.slice(-(offset + limit)).slice(0, limit); // slice from end applying offset
   return ok(res, window);
 });
 
-app.post('/status-updates', auth, (req: Request, res: Response) => {
+app.post('/status-updates', auth, selectProject, (req: Request, res: Response) => {
   const parsed = statusUpdateSchema.safeParse(req.body);
   if (!parsed.success) return fail(res, new ApiError('validation_failed', 400, 'validation_failed', parsed.error.flatten()));
   const agent: Agent = (req as any).agent;
-  const update = statusUpdateRepo.create({ actor: agent.id, message: parsed.data.message, taskId: parsed.data.taskId, projectId: DEFAULT_PROJECT_ID });
+  const projectId = (req as any).projectId;
+  const update = statusUpdateRepo.create({ actor: agent.id, message: parsed.data.message, taskId: parsed.data.taskId, projectId });
   pushAudit({ id: nanoid(10), actor: agent.id, entity: 'status_update', entityId: update.id, action: 'created', at: Date.now(), diff: { message: { to: update.message } } });
   broadcast({ type: 'status_update.created', update });
   return ok(res, update, 201);
@@ -286,24 +322,67 @@ const designNoteSchema = z.object({
   consequences: z.string().min(5).max(2000)
 });
 
-app.get('/design-notes', auth, (req: Request, res: Response) => {
+app.get('/design-notes', auth, selectProject, (req: Request, res: Response) => {
   const limit = Math.min(Number(req.query.limit) || 50, 200);
   const offset = Math.max(Number(req.query.offset) || 0, 0);
   const includeDeleted = req.query.includeDeleted === '1';
-  const notes = designNoteRepo.list(10000, { includeDeleted }); // large cap, then paginate from newest
+  const projectId = (req as any).projectId;
+  const notes = designNoteRepo.list(10000, { includeDeleted, projectId }); // large cap, then paginate from newest
   const window = notes.slice(-(offset + limit)).slice(0, limit);
   return ok(res, window);
 });
 
 // Restrict design note creation to architect or pm roles when enforcement enabled
-app.post('/design-notes', auth, requireRoles(['architect','pm']), (req: Request, res: Response) => {
+app.post('/design-notes', auth, selectProject, requireRoles(['architect','pm']), (req: Request, res: Response) => {
   const parsed = designNoteSchema.safeParse(req.body);
   if (!parsed.success) return fail(res, new ApiError('validation_failed', 400, 'validation_failed', parsed.error.flatten()));
   const agent: Agent = (req as any).agent;
-  const note = designNoteRepo.create({ actor: agent.id, ...parsed.data, projectId: DEFAULT_PROJECT_ID });
+  const projectId = (req as any).projectId;
+  const note = designNoteRepo.create({ actor: agent.id, ...parsed.data, projectId });
   pushAudit({ id: nanoid(10), actor: agent.id, entity: 'design_note', entityId: note.id, action: 'created', at: Date.now(), diff: { title: { to: note.title } } });
   broadcast({ type: 'design_note.created', note });
   return ok(res, note, 201);
+});
+
+// Projects (Phase: multi-project enablement)
+app.get('/projects', auth, (req: Request, res: Response) => {
+  const includeArchived = req.query.includeArchived === '1';
+  const list = projectRepo.list(includeArchived);
+  return ok(res, list);
+});
+
+app.post('/projects', auth, (req: Request, res: Response) => {
+  const parsed = projectCreateSchema.safeParse(req.body);
+  if (!parsed.success) return fail(res, new ApiError('validation_failed', 400, 'validation_failed', parsed.error.flatten()));
+  // Prevent explicit creation of existing id
+  if (parsed.data.id && projectRepo.getById(parsed.data.id)) return fail(res, new ApiError('validation_failed', 400, 'validation_failed', { id: { _errors: ['already_exists'] } }));
+  const proj = projectRepo.create(parsed.data);
+  pushAudit({ id: nanoid(10), actor: (req as any).agent.id, entity: 'project', entityId: proj.id, action: 'created', at: Date.now(), diff: { name: { to: proj.name } } });
+  broadcast({ type: 'project.created', project: proj });
+  return ok(res, proj, 201);
+});
+
+app.post('/projects/:id/archive', auth, (req: Request, res: Response) => {
+  const id = req.params.id;
+  if (id === DEFAULT_PROJECT_ID) return fail(res, new ApiError('forbidden', 403, 'forbidden'));
+  const existing = projectRepo.getById(id);
+  if (!existing) return fail(res, new ApiError('not_found', 404));
+  if (existing.archivedAt) return ok(res, { alreadyArchived: true });
+  projectRepo.archive(id);
+  pushAudit({ id: nanoid(10), actor: (req as any).agent.id, entity: 'project', entityId: id, action: 'archived', at: Date.now() });
+  broadcast({ type: 'project.archived', projectId: id });
+  return ok(res, { archived: true });
+});
+
+app.post('/projects/:id/restore', auth, (req: Request, res: Response) => {
+  const id = req.params.id;
+  const existing = projectRepo.getById(id);
+  if (!existing) return fail(res, new ApiError('not_found', 404));
+  if (!existing.archivedAt) return ok(res, { alreadyActive: true });
+  projectRepo.restore(id);
+  pushAudit({ id: nanoid(10), actor: (req as any).agent.id, entity: 'project', entityId: id, action: 'restored', at: Date.now() });
+  broadcast({ type: 'project.restored', projectId: id });
+  return ok(res, { restored: true });
 });
 
 // Soft delete endpoints
@@ -418,4 +497,4 @@ export function stopServer() { if (wss) { wss.clients.forEach(c => c.close()); w
 // Auto-start only when not under Vitest (so existing runtime behavior unchanged)
 if (!process.env.VITEST) ensureServer();
 
-export { app, agents, taskRepo, bugRepo, guidelines, auditLog, statusUpdateRepo, designNoteRepo };
+export { app, agents, taskRepo, bugRepo, guidelines, auditLog, statusUpdateRepo, designNoteRepo, projectRepo };

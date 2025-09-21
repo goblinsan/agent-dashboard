@@ -1,10 +1,14 @@
 openapi: 3.0.3
 info:
   title: AI Agent Dashboard API
-  version: 0.4.0
+  version: 0.5.0
   description: >
     API for coordinating agents.
-    Includes Phase 2 enhancements (bug patch + pagination) and Phase 3/4 features: soft delete + restore endpoints,
+    v0.5.0 adds multi-project support:
+      - Project CRUD endpoints (/projects, archive, restore)
+      - Per-request project selection via `x-project-id` header (falls back to `default`)
+      - All list/create endpoints for tasks, bugs, status updates, and design notes now operate within the selected project context.
+    Previous versions included Phase 2 enhancements (bug patch + pagination) and Phase 3/4 features: soft delete + restore endpoints,
     soft-delete aware listing (includeDeleted=1), and status update creation.
 servers:
   - url: http://localhost:4000
@@ -71,6 +75,7 @@ paths:
           schema: { type: string, enum: ['1'] }
           required: false
           description: If set to 1, include soft-deleted tasks in the result
+        - $ref: '#/components/parameters/ProjectHeader'
       security:
         - ApiKeyAuth: []
       responses:
@@ -94,6 +99,8 @@ paths:
       summary: Create task
       security:
         - ApiKeyAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ProjectHeader'
       requestBody:
         required: true
         content:
@@ -231,6 +238,7 @@ paths:
           schema: { type: string, enum: ['1'] }
           required: false
           description: If set to 1, include soft-deleted bugs
+        - $ref: '#/components/parameters/ProjectHeader'
       responses:
         '200':
           description: Bug list
@@ -252,6 +260,8 @@ paths:
       summary: Create bug report
       security:
         - ApiKeyAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ProjectHeader'
       requestBody:
         required: true
         content:
@@ -440,6 +450,7 @@ paths:
           name: offset
           schema: { type: integer, minimum: 0, default: 0 }
           description: Offset from newest (e.g. 0 newest window, 10 skip 10 newest)
+        - $ref: '#/components/parameters/ProjectHeader'
       responses:
         '200':
           description: Status updates list
@@ -460,6 +471,8 @@ paths:
       summary: Create status update
       security:
         - ApiKeyAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ProjectHeader'
       requestBody:
         required: true
         content:
@@ -509,6 +522,7 @@ paths:
           name: includeDeleted
           schema: { type: string, enum: ['1'] }
           description: If set to 1, include soft-deleted design notes
+        - $ref: '#/components/parameters/ProjectHeader'
       responses:
         '200':
           description: Design notes list
@@ -529,11 +543,113 @@ paths:
       summary: Create design note
       security:
         - ApiKeyAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ProjectHeader'
       requestBody:
         required: true
         content:
           application/json:
             schema:
+  /projects:
+    get:
+      summary: List projects
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: query
+          name: includeArchived
+          schema: { type: string, enum: ['1'] }
+          description: If set to 1, include archived projects
+      responses:
+        '200':
+          description: Project list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessProjects'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+    post:
+      summary: Create project
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                id: { type: string, description: Optional custom identifier (alphanumeric, dash, underscore) }
+                name: { type: string, minLength: 3, maxLength: 120 }
+                description: { type: string, maxLength: 1000 }
+      responses:
+        '201':
+          description: Created project
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessProject' }
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+  /projects/{id}/archive:
+    post:
+      summary: Archive project
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Archive result
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessArchiveProject' }
+        '403':
+          description: Forbidden (attempt to archive default project)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+  /projects/{id}/restore:
+    post:
+      summary: Restore archived project
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Restore result
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessRestoreProject' }
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
               type: object
               required: [title, context, decision, consequences]
               properties:
@@ -621,6 +737,53 @@ components:
       in: header
       name: x-api-key
   schemas:
+    Project:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        description: { type: string }
+        archivedAt: { type: integer, nullable: true, description: Epoch ms when archived; omitted/null if active }
+      required: [id, name]
+    SuccessProject:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/Project'
+    SuccessProjects:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              type: array
+              items: { $ref: '#/components/schemas/Project' }
+    ArchiveProjectResult:
+      type: object
+      properties:
+        archived: { type: boolean }
+        alreadyArchived: { type: boolean }
+    RestoreProjectResult:
+      type: object
+      properties:
+        restored: { type: boolean }
+        alreadyActive: { type: boolean }
+    SuccessArchiveProject:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ArchiveProjectResult'
+    SuccessRestoreProject:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/RestoreProjectResult'
     SuccessEnvelope:
       type: object
       properties:
@@ -823,3 +986,11 @@ components:
           properties:
             data:
               $ref: '#/components/schemas/RestoreResult'
+  parameters:
+    ProjectHeader:
+      name: x-project-id
+      in: header
+      required: false
+      schema:
+        type: string
+      description: Optional project context (defaults to 'default'). Archived or unknown project ids return 404.

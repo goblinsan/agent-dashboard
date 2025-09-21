@@ -18,20 +18,22 @@ export interface DesignNoteCreateInput {
   decision: string;
   consequences: string;
   actor: string;
+  projectId?: string;
 }
 
 export class InMemoryDesignNoteRepository {
   private items: DesignNoteRecord[] = [];
 
   create(input: DesignNoteCreateInput): DesignNoteRecord {
-  const rec: DesignNoteRecord = { id: nanoid(10), projectId: 'default', createdAt: Date.now(), ...input };
+	const rec: DesignNoteRecord = { id: nanoid(10), projectId: input.projectId || 'default', createdAt: Date.now(), ...input };
     this.items.push(rec);
     return rec;
   }
 
-  list(limit = 50, opts?: { includeDeleted?: boolean }): DesignNoteRecord[] {
+  list(limit = 50, opts?: { includeDeleted?: boolean; projectId?: string }): DesignNoteRecord[] {
     let arr = this.items;
     if (!opts?.includeDeleted) arr = arr.filter(i => !(i as any).deletedAt);
+    if (opts?.projectId) arr = arr.filter(i => i.projectId === opts.projectId);
     return arr.slice(-limit);
   }
   getById(id: string, includeDeleted = false): DesignNoteRecord | undefined {

@@ -2,8 +2,8 @@ import { BugReport } from '../../../shared/types/index.js';
 
 export interface BugCreateInput { title: string; severity: 'low' | 'medium' | 'high' | 'critical'; reproSteps: string[]; taskId?: string; proposedFix?: string }
 export interface BugRepository {
-  create(input: BugCreateInput): BugReport;
-  list(opts?: { includeDeleted?: boolean }): BugReport[];
+  create(input: BugCreateInput & { projectId?: string }): BugReport;
+  list(opts?: { includeDeleted?: boolean; projectId?: string }): BugReport[];
   getById(id: string, includeDeleted?: boolean): BugReport | undefined;
   save(bug: BugReport): void;
   softDelete?(id: string): void;
@@ -11,16 +11,17 @@ export interface BugRepository {
 
 export class InMemoryBugRepository implements BugRepository {
   private store = new Map<string, BugReport>();
-  create(input: BugCreateInput): BugReport {
+  create(input: BugCreateInput & { projectId?: string }): BugReport {
     const id = 'B-' + Math.random().toString(36).slice(2, 8);
   const now = Date.now();
-  const bug: BugReport = { id, projectId: 'default', title: input.title, severity: input.severity as any, description: undefined, status: 'open', linkedTaskIds: input.taskId ? [input.taskId] : [], reproSteps: input.reproSteps, proposedFix: input.proposedFix, createdAt: now, updatedAt: now, reporter: undefined, version: 1 } as BugReport;
+	const bug: BugReport = { id, projectId: input.projectId || 'default', title: input.title, severity: input.severity as any, description: undefined, status: 'open', linkedTaskIds: input.taskId ? [input.taskId] : [], reproSteps: input.reproSteps, proposedFix: input.proposedFix, createdAt: now, updatedAt: now, reporter: undefined, version: 1 } as BugReport;
     this.store.set(id, bug);
     return bug;
   }
-  list(opts?: { includeDeleted?: boolean }): BugReport[] {
+  list(opts?: { includeDeleted?: boolean; projectId?: string }): BugReport[] {
     let vals = [...this.store.values()];
     if (!opts?.includeDeleted) vals = vals.filter(b => !(b as any).deletedAt);
+    if (opts?.projectId) vals = vals.filter(b => (b as any).projectId === opts.projectId);
     return vals;
   }
   getById(id: string) { return this.store.get(id); }
