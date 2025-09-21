@@ -6,8 +6,10 @@ import { InMemoryBugRepository } from './repositories/bugRepository.js';
 import { InMemoryStatusUpdateRepository } from './repositories/statusUpdateRepository.js';
 import { InMemoryDesignNoteRepository } from './repositories/designNoteRepository.js';
 import { InMemoryProjectRepository } from './repositories/projectRepository.js';
+import { InMemoryPhaseRepository } from './repositories/phaseRepository.js';
 import { WebSocketServer, WebSocket } from 'ws';
 import { z } from 'zod';
+import { computeProjectStatus, computeAggregatedProjectStatus, invalidateProjectStatus } from './services/projectStatus.js';
 
 // In-memory stores & types
 interface Agent { id: string; name: string; apiKey: string; role?: string; lastHeartbeat?: number; currentTaskId?: string; }
@@ -27,6 +29,7 @@ let bugRepo: any;
 let statusUpdateRepo: any;
 let designNoteRepo: any;
 let projectRepo: any;
+let phaseRepo: any;
 
 function ensureProjectRepo() {
   if (!projectRepo) {
@@ -34,17 +37,28 @@ function ensureProjectRepo() {
   }
   return projectRepo;
 }
+function ensurePhaseRepo() {
+  if (!phaseRepo) {
+    phaseRepo = new InMemoryPhaseRepository();
+    // Ensure a default phase for default project in in-memory mode (deterministic id pattern)
+    if (phaseRepo.ensureDefaultPhase) phaseRepo.ensureDefaultPhase(DEFAULT_PROJECT_ID, 'phase_' + DEFAULT_PROJECT_ID);
+  }
+  return phaseRepo;
+}
 if (useSqlite) {
   try {
     // Dynamic import to avoid runtime error if dependency missing
     const { SqliteTaskRepository, SqliteBugRepository, SqliteStatusUpdateRepository, SqliteDesignNoteRepository } = await import('./repositories/sqliteRepositories.js').catch(() => ({} as any));
-    const { SqliteProjectRepository } = await import('./repositories/sqliteProjectRepository.js').catch(() => ({} as any));
+  const { SqliteProjectRepository } = await import('./repositories/sqliteProjectRepository.js').catch(() => ({} as any));
+  const { SqlitePhaseRepository } = await import('./repositories/sqlitePhaseRepository.js').catch(() => ({} as any));
     if (SqliteTaskRepository && SqliteBugRepository && SqliteStatusUpdateRepository && SqliteDesignNoteRepository) {
       taskRepo = new SqliteTaskRepository();
       bugRepo = new SqliteBugRepository();
       statusUpdateRepo = new SqliteStatusUpdateRepository();
       designNoteRepo = new SqliteDesignNoteRepository();
       projectRepo = SqliteProjectRepository ? new SqliteProjectRepository() : new InMemoryProjectRepository();
+      phaseRepo = SqlitePhaseRepository ? new SqlitePhaseRepository() : new InMemoryPhaseRepository();
+      if (phaseRepo.ensureDefaultPhase) phaseRepo.ensureDefaultPhase(DEFAULT_PROJECT_ID, 'phase_' + DEFAULT_PROJECT_ID);
       console.log('[persistence] SQLite enabled (tasks, bugs, status updates, design notes)');
     } else {
       console.warn('[persistence] SQLite requested but repository module unavailable – falling back to in-memory');
@@ -53,6 +67,8 @@ if (useSqlite) {
       statusUpdateRepo = new InMemoryStatusUpdateRepository();
       designNoteRepo = new InMemoryDesignNoteRepository();
       projectRepo = new InMemoryProjectRepository();
+      phaseRepo = new InMemoryPhaseRepository();
+      if (phaseRepo.ensureDefaultPhase) phaseRepo.ensureDefaultPhase(DEFAULT_PROJECT_ID, 'phase_' + DEFAULT_PROJECT_ID);
     }
   } catch (err) {
     console.warn('[persistence] SQLite initialization failed – using in-memory. Error:', (err as any)?.message);
@@ -60,6 +76,9 @@ if (useSqlite) {
     bugRepo = new InMemoryBugRepository();
     statusUpdateRepo = new InMemoryStatusUpdateRepository();
     designNoteRepo = new InMemoryDesignNoteRepository();
+    projectRepo = new InMemoryProjectRepository();
+    phaseRepo = new InMemoryPhaseRepository();
+    if (phaseRepo.ensureDefaultPhase) phaseRepo.ensureDefaultPhase(DEFAULT_PROJECT_ID, 'phase_' + DEFAULT_PROJECT_ID);
   }
 } else {
   taskRepo = new InMemoryTaskRepository();
@@ -67,6 +86,8 @@ if (useSqlite) {
   statusUpdateRepo = new InMemoryStatusUpdateRepository();
   designNoteRepo = new InMemoryDesignNoteRepository();
   projectRepo = new InMemoryProjectRepository();
+  phaseRepo = new InMemoryPhaseRepository();
+  if (phaseRepo.ensureDefaultPhase) phaseRepo.ensureDefaultPhase(DEFAULT_PROJECT_ID, 'phase_' + DEFAULT_PROJECT_ID);
 }
 const guidelines = new Map<string, Guideline>();
 const auditLog: { id: string; actor: string; entity: string; entityId: string; action: string; at: number; diff?: any }[] = [];
@@ -163,7 +184,22 @@ const bugUpdateSchema = z.object({
 const projectCreateSchema = z.object({
   id: z.string().min(2).max(40).regex(/^[a-zA-Z0-9_-]+$/).optional(),
   name: z.string().min(3).max(120),
+  description: z.string().max(1000).optional(),
+  parentProjectId: z.string().optional()
+});
+
+// Phase schemas (Slice 2)
+const phaseCreateSchema = z.object({
+  name: z.string().min(2).max(120),
   description: z.string().max(1000).optional()
+});
+const phaseReorderSchema = z.object({
+  phases: z.array(z.object({ id: z.string(), orderIndex: z.number().int().min(0) })).min(1)
+});
+const taskMoveSchema = z.object({
+  phaseId: z.string(),
+  // Optional explicit priority; if absent we'll append at end
+  phasePriority: z.number().int().min(0).optional()
 });
 
 // Routes
@@ -179,8 +215,24 @@ app.post('/agents/register', (req: Request, res: Response) => {
 app.get('/tasks', auth, selectProject, (req: Request, res: Response) => {
   const status = req.query.status as string | undefined;
   const includeDeleted = req.query.includeDeleted === '1';
+  const ordered = req.query.ordered === '1';
   const projectId = (req as any).projectId;
-  const list = taskRepo.list({ status: status ? status.replace(/^open$/, 'todo').replace(/^completed$/, 'done') : undefined, includeDeleted, projectId });
+  let list = taskRepo.list({ status: status ? status.replace(/^open$/, 'todo').replace(/^completed$/, 'done') : undefined, includeDeleted, projectId });
+  if (ordered) {
+    // Acquire phases (exclude archived) for ordering context
+    const phases = ensurePhaseRepo().list(projectId, false);
+    const phaseOrderIndex = new Map<string, number>();
+    phases.forEach((p: any) => phaseOrderIndex.set(p.id, p.orderIndex));
+    list = [...list].sort((a: any, b: any) => {
+      const ao = phaseOrderIndex.get(a.phaseId) ?? 9999;
+      const bo = phaseOrderIndex.get(b.phaseId) ?? 9999;
+      if (ao !== bo) return ao - bo;
+      const ap = a.phasePriority ?? 9999;
+      const bp = b.phasePriority ?? 9999;
+      if (ap !== bp) return ap - bp;
+      return a.createdAt - b.createdAt;
+    });
+  }
   return ok(res, list);
 });
 
@@ -192,6 +244,7 @@ app.post('/tasks', auth, selectProject, (req: Request, res: Response) => {
   const actor = (req as any).agent?.id || 'system';
   pushAudit({ id: nanoid(10), actor, entity: 'task', entityId: task.id, action: 'created', at: Date.now(), diff: { status: { to: 'todo' } } });
   broadcast({ type: 'task.created', task });
+  if ((task as any).projectId) invalidateProjectStatus((task as any).projectId);
   return ok(res, task, 201);
 });
 
@@ -215,6 +268,7 @@ app.post('/tasks/:id/transition', auth, (req: Request, res: Response) => {
   pushAudit({ id: nanoid(10), actor: agent.id, entity: 'task', entityId: task.id, action: 'status_change', at: Date.now(), diff: { status: { from: prevStatus, to: newStatus } } });
   taskRepo.save(task);
   broadcast({ type: 'task.updated', task });
+  if ((task as any).projectId) invalidateProjectStatus((task as any).projectId);
   return ok(res, task);
 });
 
@@ -357,9 +411,31 @@ app.post('/projects', auth, (req: Request, res: Response) => {
   // Prevent explicit creation of existing id
   if (parsed.data.id && projectRepo.getById(parsed.data.id)) return fail(res, new ApiError('validation_failed', 400, 'validation_failed', { id: { _errors: ['already_exists'] } }));
   const proj = projectRepo.create(parsed.data);
+  if (parsed.data.parentProjectId) {
+    try { projectRepo.setParent(proj.id, parsed.data.parentProjectId); (proj as any).parentProjectId = parsed.data.parentProjectId; }
+    catch (e: any) { return fail(res, new ApiError('validation_failed', 400, e.message)); }
+  }
   pushAudit({ id: nanoid(10), actor: (req as any).agent.id, entity: 'project', entityId: proj.id, action: 'created', at: Date.now(), diff: { name: { to: proj.name } } });
   broadcast({ type: 'project.created', project: proj });
   return ok(res, proj, 201);
+});
+
+// Set or clear parent project
+app.patch('/projects/:id/parent', auth, (req: Request, res: Response) => {
+  const id = req.params.id;
+  const proj = projectRepo.getById(id);
+  if (!proj) return fail(res, new ApiError('not_found', 404));
+  const parentProjectId = req.body?.parentProjectId ?? null;
+  if (parentProjectId && !projectRepo.getById(parentProjectId)) return fail(res, new ApiError('validation_failed', 400, 'parent_not_found'));
+  try {
+    projectRepo.setParent(id, parentProjectId);
+  } catch (e: any) {
+    if (e.message?.startsWith('CYCLE')) return fail(res, new ApiError('validation_failed', 400, e.message));
+    return fail(res, new ApiError('internal_error', 500));
+  }
+  pushAudit({ id: nanoid(10), actor: (req as any).agent.id, entity: 'project', entityId: id, action: 'set_parent', at: Date.now(), diff: { parentProjectId: { to: parentProjectId } } });
+  broadcast({ type: 'project.parent_updated', projectId: id, parentProjectId });
+  return ok(res, { updated: true, projectId: id, parentProjectId });
 });
 
 app.post('/projects/:id/archive', auth, (req: Request, res: Response) => {
@@ -383,6 +459,94 @@ app.post('/projects/:id/restore', auth, (req: Request, res: Response) => {
   pushAudit({ id: nanoid(10), actor: (req as any).agent.id, entity: 'project', entityId: id, action: 'restored', at: Date.now() });
   broadcast({ type: 'project.restored', projectId: id });
   return ok(res, { restored: true });
+});
+
+// Phases (Slice 2 CRUD - project scoped)
+app.post('/phases', auth, selectProject, (req: Request, res: Response) => {
+  const parsed = phaseCreateSchema.safeParse(req.body);
+  if (!parsed.success) return fail(res, new ApiError('validation_failed', 400, 'validation_failed', parsed.error.flatten()));
+  const projectId = (req as any).projectId;
+  const repo = ensurePhaseRepo();
+  const phase = repo.create({ projectId, name: parsed.data.name, description: parsed.data.description });
+  pushAudit({ id: nanoid(10), actor: (req as any).agent.id, entity: 'phase', entityId: phase.id, action: 'created', at: Date.now(), diff: { name: { to: phase.name } } });
+  broadcast({ type: 'phase.created', phase });
+  return ok(res, phase, 201);
+});
+
+app.get('/projects/:id/phases', auth, (req: Request, res: Response) => {
+  const projId = req.params.id;
+  const proj = ensureProjectRepo().getById(projId);
+  if (!proj || proj.archivedAt) return fail(res, new ApiError('not_found', 404, 'project_not_found'));
+  const repo = ensurePhaseRepo();
+  const phases = repo.list(projId, req.query.includeArchived === '1');
+  return ok(res, phases);
+});
+
+app.post('/phases/:id/archive', auth, (req: Request, res: Response) => {
+  const repo = ensurePhaseRepo();
+  const ph = repo.getById(req.params.id);
+  if (!ph) return fail(res, new ApiError('not_found', 404));
+  if (ph.archivedAt) return ok(res, { alreadyArchived: true });
+  repo.archive(ph.id);
+  pushAudit({ id: nanoid(10), actor: (req as any).agent.id, entity: 'phase', entityId: ph.id, action: 'archived', at: Date.now() });
+  broadcast({ type: 'phase.archived', phaseId: ph.id });
+  return ok(res, { archived: true });
+});
+
+app.post('/phases/:id/restore', auth, (req: Request, res: Response) => {
+  const repo = ensurePhaseRepo();
+  const ph = repo.getById(req.params.id);
+  if (!ph) return fail(res, new ApiError('not_found', 404));
+  if (!ph.archivedAt) return ok(res, { alreadyActive: true });
+  repo.restore(ph.id);
+  pushAudit({ id: nanoid(10), actor: (req as any).agent.id, entity: 'phase', entityId: ph.id, action: 'restored', at: Date.now() });
+  broadcast({ type: 'phase.restored', phaseId: ph.id });
+  return ok(res, { restored: true });
+});
+
+app.post('/phases/reorder', auth, (req: Request, res: Response) => {
+  const parsed = phaseReorderSchema.safeParse(req.body);
+  if (!parsed.success) return fail(res, new ApiError('validation_failed', 400, 'validation_failed', parsed.error.flatten()));
+  const repo = ensurePhaseRepo();
+  repo.reorder(parsed.data.phases);
+  pushAudit({ id: nanoid(10), actor: (req as any).agent.id, entity: 'phase', entityId: 'batch', action: 'reordered', at: Date.now(), diff: { count: { to: parsed.data.phases.length } } });
+  broadcast({ type: 'phase.reordered' });
+  return ok(res, { reordered: true });
+});
+
+// Project status snapshot (Slice 3)
+app.get('/projects/:id/status', auth, (req: Request, res: Response) => {
+  const projId = req.params.id;
+  const rollup = req.query.rollup === '1';
+  const snapshot = rollup ? computeAggregatedProjectStatus(projId) : computeProjectStatus(projId);
+  if (!snapshot) return fail(res, new ApiError('not_found', 404, 'project_not_found_or_inactive'));
+  return ok(res, snapshot);
+});
+
+// Move task between phases
+app.patch('/tasks/:id/move', auth, (req: Request, res: Response) => {
+  const parse = taskMoveSchema.safeParse(req.body);
+  if (!parse.success) return fail(res, new ApiError('validation_failed', 400, 'validation_failed', parse.error.flatten()));
+  const t = taskRepo.getById(req.params.id);
+  if (!t) return fail(res, new ApiError('not_found', 404));
+  const repo = ensurePhaseRepo();
+  const targetPhase = repo.getById(parse.data.phaseId);
+  if (!targetPhase) return fail(res, new ApiError('not_found', 404, 'phase_not_found'));
+  if (targetPhase.projectId !== (t as any).projectId) return fail(res, new ApiError('validation_failed', 400, 'phase_project_mismatch'));
+  // Determine phasePriority: if provided use it, else append (max+1)
+  let desiredPriority = parse.data.phasePriority;
+  if (desiredPriority === undefined) {
+    // naive scan for existing max in this phase (in-memory friendly); for sqlite rely on query mapping
+    const all = taskRepo.list({ projectId: targetPhase.projectId });
+    const inPhase = all.filter((x: any) => x.phaseId === targetPhase.id);
+    const max = inPhase.reduce((m: number, cur: any) => cur.phasePriority !== undefined && cur.phasePriority > m ? cur.phasePriority : m, -1);
+    desiredPriority = max + 1;
+  }
+  const updated = taskRepo.setPhase ? taskRepo.setPhase(t.id, targetPhase.id, desiredPriority) : undefined;
+  if (!updated) return fail(res, new ApiError('internal_error', 500));
+  pushAudit({ id: nanoid(10), actor: (req as any).agent.id, entity: 'task', entityId: t.id, action: 'moved_phase', at: Date.now(), diff: { phaseId: { to: targetPhase.id }, phasePriority: { to: desiredPriority } } });
+  broadcast({ type: 'task.moved', task: updated });
+  return ok(res, updated);
 });
 
 // Soft delete endpoints
@@ -497,4 +661,4 @@ export function stopServer() { if (wss) { wss.clients.forEach(c => c.close()); w
 // Auto-start only when not under Vitest (so existing runtime behavior unchanged)
 if (!process.env.VITEST) ensureServer();
 
-export { app, agents, taskRepo, bugRepo, guidelines, auditLog, statusUpdateRepo, designNoteRepo, projectRepo };
+export { app, agents, taskRepo, bugRepo, guidelines, auditLog, statusUpdateRepo, designNoteRepo, projectRepo, phaseRepo };

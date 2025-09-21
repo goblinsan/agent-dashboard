@@ -11,15 +11,21 @@ function parseJson<T>(v: any, fallback: T): T {
 
 export class SqliteTaskRepository {
   private db = getDb();
-  create(data: { title: string; priority?: string; projectId?: string }): Task {
+  create(data: { title: string; priority?: string; projectId?: string; phaseId?: string }): Task {
     const id = 'T-' + Math.random().toString(36).slice(2,8);
     const ts = now();
     const projectId = (data as any).projectId || 'default';
-    const task: Task = { id, projectId, title: data.title, status: 'todo', version: 1, assignees: [], priority: data.priority as any, rationaleLog: [], createdAt: ts, updatedAt: ts } as Task;
+    const task: Task = { id, projectId, phaseId: (data as any).phaseId, title: data.title, status: 'todo', version: 1, assignees: [], priority: data.priority as any, rationaleLog: [], createdAt: ts, updatedAt: ts } as Task;
     // Attempt insert with project_id if column exists; fallback silently if not (pre-migration runtime)
     try {
-      this.db.prepare(`INSERT INTO tasks (id,title,status,version,priority,assignees,rationale_log,created_at,updated_at,project_id) VALUES (?,?,?,?,?,?,?,?,?,?)`)
-        .run(task.id, task.title, task.status, task.version, task.priority || null, JSON.stringify(task.assignees), JSON.stringify(task.rationaleLog), task.createdAt, task.updatedAt, projectId);
+      // Try including phase columns if present
+      try {
+        this.db.prepare(`INSERT INTO tasks (id,title,status,version,priority,assignees,rationale_log,created_at,updated_at,project_id,phase_id,phase_priority) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`)
+          .run(task.id, task.title, task.status, task.version, task.priority || null, JSON.stringify(task.assignees), JSON.stringify(task.rationaleLog), task.createdAt, task.updatedAt, projectId, task.phaseId || null, null);
+      } catch {
+        this.db.prepare(`INSERT INTO tasks (id,title,status,version,priority,assignees,rationale_log,created_at,updated_at,project_id) VALUES (?,?,?,?,?,?,?,?,?,?)`)
+          .run(task.id, task.title, task.status, task.version, task.priority || null, JSON.stringify(task.assignees), JSON.stringify(task.rationaleLog), task.createdAt, task.updatedAt, projectId);
+      }
     } catch {
       this.db.prepare(`INSERT INTO tasks (id,title,status,version,priority,assignees,rationale_log,created_at,updated_at) VALUES (?,?,?,?,?,?,?, ?, ?)`)
         .run(task.id, task.title, task.status, task.version, task.priority || null, JSON.stringify(task.assignees), JSON.stringify(task.rationaleLog), task.createdAt, task.updatedAt);
@@ -51,7 +57,16 @@ export class SqliteTaskRepository {
   softDelete(id: string) { this.db.prepare('UPDATE tasks SET deleted_at=? WHERE id=? AND deleted_at IS NULL').run(Date.now(), id); }
   restore(id: string) { this.db.prepare('UPDATE tasks SET deleted_at=NULL WHERE id=?').run(id); }
   private map(r: any): Task {
-    return { id: r.id, projectId: r.project_id || 'default', title: r.title, status: r.status, version: r.version, assignees: parseJson<string[]>(r.assignees, []), priority: r.priority || undefined, rationaleLog: parseJson<string[]>(r.rationale_log, []), createdAt: r.created_at, updatedAt: r.updated_at, deletedAt: r.deleted_at || undefined } as Task;
+    return { id: r.id, projectId: r.project_id || 'default', phaseId: r.phase_id || undefined, phasePriority: r.phase_priority || undefined, title: r.title, status: r.status, version: r.version, assignees: parseJson<string[]>(r.assignees, []), priority: r.priority || undefined, rationaleLog: parseJson<string[]>(r.rationale_log, []), createdAt: r.created_at, updatedAt: r.updated_at, deletedAt: r.deleted_at || undefined } as Task;
+  }
+  setPhase(taskId: string, phaseId: string, phasePriority: number) {
+    try {
+      this.db.prepare('UPDATE tasks SET phase_id=?, phase_priority=?, updated_at=? WHERE id=?')
+        .run(phaseId, phasePriority, Date.now(), taskId);
+      const row = this.db.prepare('SELECT * FROM tasks WHERE id=?').get(taskId);
+      if (!row) return;
+      return this.map(row);
+    } catch { return; }
   }
 }
 

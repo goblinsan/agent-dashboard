@@ -1,6 +1,6 @@
 # Project Plan: AI Agent Dashboard
 
-Last Updated: 2025-09-21T15:25:00Z
+Last Updated: 2025-09-21T18:45:30Z
 Auto-Refresh Directive: After any task moves to Done, the responsible agent MUST (a) update status fields, (b) add emergent follow-up tasks, (c) prune obsolete tasks, and (d) refresh the Logical Next Steps section timestamp.
 
 ## 1. Vision & High-Level Goal
@@ -61,6 +61,7 @@ MVP Status: ✅ COMPLETE (all exit criteria satisfied; further changes tracked a
 | 7 | Security & Reliability | Harden platform & gate risky changes | Vulnerability severity enforcement, rate limiting, auth expansion, audit persistence decision |
 | 8 | Scale & Data Evolution | Prepare for higher volume & pagination robustness | Cursor pagination, retention policies, hard purge workflow, upsert-aware import |
 | 9 | Collaboration & Extensibility | Integrations & notification pathways | Webhook queue, subscription filters, multi-agent presence, pluggable event hooks |
+| 10 | Hierarchical Projects & Roll-up | Introduce phases, nested projects, roll-up status & richer metadata | Phase entity, parent projects, completion aggregation, status readout API/UI |
 
 ## 3. Enhancement Backlog (Prioritized)
 Single authoritative backlog. "Priority" uses P0 (near-term), P1 (important), P2 (nice). Phase Target is provisional.
@@ -87,12 +88,34 @@ Single authoritative backlog. "Priority" uses P0 (near-term), P1 (important), P2
 | B-18 | WebSocket auth tightening | Validate API key on upgrade | P2 | 7 | Todo |
 | B-19 | Audit UI surface | Minimal UI page for recent audits | P2 | 6 | Todo |
 | B-20 | Vulnerability diff trend | Track deltas across CI runs | P2 | 7 | Todo |
-| B-21 | Project entity schema | Define Project (id, name, description, createdAt, archivedAt?) | P0 | 6 | Todo |
-| B-22 | Project reference propagation | Add projectId to tasks, bugs, status updates, design notes | P0 | 6 | Todo |
-| B-23 | Project CRUD API | Endpoints: create/list/archive/select (header or query) | P0 | 6 | Todo |
-| B-24 | Migration for project tables | SQLite migration + backfill existing records to default project | P0 | 6 | Todo |
-| B-25 | Project selection UI | Dropdown + create project inline (persists selection in localStorage) | P1 | 6 | Todo |
+| B-21 | Project entity schema | Define Project (id, name, description, createdAt, archivedAt?) | P0 | 6 | Done |
+| B-22 | Project reference propagation | Add projectId to tasks, bugs, status updates, design notes | P0 | 6 | Done |
+| B-23 | Project CRUD API | Endpoints: create/list/archive/select (header or query) | P0 | 6 | Done |
+| B-24 | Migration for project tables | SQLite migration + backfill existing records to default project | P0 | 6 | Done |
+| B-25 | Project selection UI | Dropdown + create project inline (persists selection in localStorage) | P1 | 6 | Done |
 | B-26 | Export/import multi-project aware | Include projects array & per-entity projectId in snapshot | P1 | 8 | Todo |
+| B-27 | Phase entity schema | Define Phase (id, projectId, name, description?, orderIndex, createdAt, archivedAt?) | P0 | 10 | Done |
+| B-28 | Phase migration & backfill | SQLite migration; create implicit default phase per existing project; update export/import | P0 | 10 | In-Progress (migration file added; enforcement step pending) |
+| B-29 | Phase CRUD & reorder API | Create/list/update/archive; reorder endpoint (batch orderIndex update) | P0 | 10 | Done |
+| B-30 | Task phase linkage | Add `phaseId` to tasks (nullable until backfilled); enforce phase-project consistency | P0 | 10 | Done |
+| B-31 | In-phase task prioritization | Add `phasePriority` (int) with reorder API; adjust list sorting | P1 | 10 | Done (basic move & ordered listing implemented) |
+| B-32 | Project extended metadata | Fields: highLevelDescription, prioritizationRubric (md/text), securityGuidelines (md), devOps (repoUrl, ciUrl, slackChannel) | P0 | 10 | Todo |
+| B-33 | Nested project support | Add `parentProjectId` + depth validation + roll-up rules | P1 | 10 | Done (in-memory; cycle detection app-layer) |
+| B-34 | Completion roll-up engine | Compute % complete from leaf tasks via phases → projects; cache & invalidate on mutation | P0 | 10 | Partial (aggregation implemented, caching deferred) |
+| B-35 | Project status readout API | Endpoint `/projects/:id/status` returning activePhase, completionPct, activeTaskCount, nextPriorityTask | P0 | 10 | Done (extended with optional rollup=1) |
+| B-36 | Status readout UI panel | Surface aggregated status in dashboard; auto-refresh | P1 | 10 | Todo |
+| B-37 | Phase management UI | Create/reorder/archive phases; drag & drop reorder (progressive enhancement) | P1 | 10 | Todo |
+| B-38 | Rubric & security docs UI | Read-only render of markdown fields with basic sanitation | P2 | 10 | Todo |
+| B-39 | Project metadata edit API | PATCH endpoints for rubric/security/devOps links | P1 | 10 | Todo |
+| B-40 | Hierarchical export/import | Extend snapshot format with phases, parentProjectId, phase/task ordering | P1 | 10 | Todo |
+| B-41 | Roll-up test suite | Unit tests for completion math across nested projects & phase/task edge cases | P0 | 10 | Todo |
+| B-42 | Data validation guards | Ensure phase.projectId matches task.projectId; prevent cycles in project nesting | P0 | 10 | Todo |
+| B-43 | Migration backfill tasks → default phase | After creating default phase per project, assign tasks lacking phaseId | P0 | 10 | Todo |
+| B-44 | Performance optimization (roll-up) | Incremental invalidation vs full recompute; benchmark >5k tasks | P2 | 10 | Todo |
+| B-45 | Phase archive behavior | Define effect on tasks (freeze? allow moves?); implement rules & tests | P1 | 10 | Todo |
+| B-46 | DevOps link health check | Background ping to repo/slack endpoints surfaced in status | P2 | 10 | Todo |
+| B-47 | Access control extensions | Gate editing of security & rubric fields by role (future flag) | P2 | 10 | Todo |
+| B-48 | UI task prioritization controls | Inline drag or up/down controls within phase | P2 | 10 | Todo |
 
 Backlog Grooming Rule: After completing any P0/P1 item, reassess next 1–2 items for reprioritization; avoid pulling >2 concurrent P1 efforts.
 
@@ -107,8 +130,9 @@ Subsequent sections retain prior numbering intent but have been shifted.
 ## 3. Domain Model (Draft)
 | Entity | Key Fields | Notes |
 |--------|------------|-------|
-| Project | id, name, description?, createdAt, archivedAt? | Logical container for all other entities |
-| Task | id, projectId, title, description, status, priority, owner, createdAt, updatedAt, deletedAt? | Status: todo/in_progress/blocked/done |
+| Project | id, name, description?, highLevelDescription?, prioritizationRubric?, securityGuidelines?, devOps{repoUrl,ciUrl,slackChannel?}, parentProjectId?, createdAt, archivedAt? | Logical container; can nest; extended metadata optional |
+| Phase | id, projectId, name, description?, orderIndex, createdAt, archivedAt? | Ordered child of a project; groups tasks; archived phases exclude tasks from active roll-up |
+| Task | id, projectId, phaseId?, title, description, status, priority (legacy), phasePriority?, owner, createdAt, updatedAt, deletedAt? | Status: todo/in_progress/blocked/done; phasePriority supersedes priority when phaseId present |
 | BugReport | id, projectId, title, description, severity, stepsToReproduce, status, linkedTaskIds[], createdAt, deletedAt? | Severity: low/medium/high/critical |
 | StatusUpdate | id, projectId, actor, scope(taskId|null), message, createdAt | projectId defaults to selected project context |
 | DesignNote (ADR-lite) | id, projectId, title, context, decision, consequences, createdAt, supersededBy?, deletedAt? | Multi-project scoping |
@@ -144,15 +168,17 @@ Subsequent sections retain prior numbering intent but have been shifted.
 | Over-automation early | Waste | Medium | Manual first policy |
 
 ## 8. Logical Next Steps (Auto-Refresh Section)
-Timestamp: 2025-09-21T12:40:00Z
+Timestamp: 2025-09-21T16:05:00Z
 | Priority | Action | Rationale | Owner |
 |----------|--------|-----------|-------|
-| Medium | CI SQLite matrix (P3-11) | Persistence validation in CI | DevOps |
-| Low | Cursor pagination evaluation (EB-1) | Scale readiness | Dev |
-| Low | Vulnerability severity enforcement (EB-4) | Strengthen security gate | Security |
-| Low | Audit log persistence reconsideration (P3-12) | Post-MVP decision | Architect |
-| Low | Metrics design doc (P5 prep) | Prepare observability phase | Dev |
-| Medium | Project schema & selection design (B-21/B-22) | Enable multi-project groundwork | Architect |
+| High | Phase & hierarchy schema design (B-27/B-32/B-33) | Unblock hierarchical tracking implementation | Architect |
+| High | Migration draft for phases & backfill (B-28/B-43) | Ensure data continuity & seamless rollout | Dev |
+| High | Roll-up algorithm spec (B-34/B-41) | Define deterministic completion math before coding | Dev |
+| Medium | Project status readout contract (B-35) | Align UI & API early | PM |
+| Medium | Extended project metadata fields format decision (markdown vs plain) | Consistency & rendering concerns | Architect |
+| Medium | Metrics design doc (B-1/B-2 dependency) | Prepare observability phase synergy with status readout | Dev |
+| Low | Cursor pagination evaluation (B-8) | Scale readiness | Dev |
+| Low | Vulnerability severity enforcement (B-3) | Strengthen security gate | Security |
 
 Refresh Instructions: When any above action completes, update its source table, remove or demote it here, add newly emergent actions, and reset the timestamp to current ISO.
 
@@ -233,6 +259,114 @@ The MVP is complete when a new developer or stakeholder can within 5 minutes:
 - [x] Dependency audit: no high/critical (or documented rationale).
 
 MVP Lock Note: Additional automated assertions were added (soft delete `deletedAt` presence) post-lock without changing scope. Further work proceeds under Phase 5 or enhancement backlog without reopening MVP criteria.
+
+## 12. Hierarchical Projects & Phases Implementation Plan
+
+### 12.1 Goals
+Introduce ordered phases within projects, allow nested projects, provide a real-time status readout (active phase, completion %, active tasks, next priority task), and enrich project metadata (rubric, security guidelines, DevOps integrations).
+
+### 12.2 Key Concepts
+1. Phase: Ordered lane of execution within a project; tasks belong to exactly one phase (after backfill) unless legacy/unassigned during transition.
+2. Nested Project: A project may optionally have a `parentProjectId`; completion rolls up leaf task completion via phases.
+3. Roll-up Completion: Percentage = completedLeafTasks / totalLeafTasks (excluding archived phases & soft-deleted tasks). Cached with invalidation triggers on entity mutation.
+4. Status Readout: Aggregated snapshot served by dedicated endpoint (B-35) for dashboard & agents.
+5. Metadata Fields: Markdown-capable long-form fields (prioritizationRubric, securityGuidelines) sanitized before UI rendering.
+
+### 12.3 Ordering & Prioritization
+Phases have `orderIndex` (0-based). Tasks within a phase have `phasePriority` (dense integers after reorder). Reordering operations are idempotent and batch-updated for atomicity.
+
+### 12.4 API Additions (Incremental)
+Implemented so far:
+1. `POST /phases` create phase.
+2. `GET /projects/:id/phases` list ordered phases.
+3. (Patch rename not yet implemented) – future minor enhancement.
+4. `POST /phases/reorder` batch reorder (id + orderIndex array).
+5. `POST /phases/:id/archive` & `/restore`.
+6. `PATCH /tasks/:id/move` to assign `phaseId` and computed/appended `phasePriority`.
+7. Ordered listing: `GET /tasks?ordered=1` sorts by (phase.orderIndex, phasePriority, createdAt).
+8. `GET /projects/:id/status` base snapshot.
+9. `GET /projects/:id/status?rollup=1` aggregated snapshot including children.
+10. `PATCH /projects/:id/parent` set or clear parent with cycle guard.
+
+Planned (not yet implemented):
+- Bulk phase priority reorder endpoint for tasks within a phase.
+- Phase rename/update endpoint.
+	 ```json
+	 {
+		 "projectId": "...",
+		 "activePhase": { "id": "...", "name": "..." },
+		 "completionPct": 72.5,
+		 "activeTaskCount": 5,
+		 "nextPriorityTask": { "id": "...", "title": "...", "phaseId": "..." }
+	 }
+	 ```
+
+### 12.5 Roll-up Algorithm (Current Implementation & Draft Enhancements)
+Inputs: All non-deleted tasks belonging to non-archived phases of target project or its descendant projects (recursive).
+Computation:
+1. Collect leaf tasks set T.
+2. Let C = count(tasks in T with status == done).
+3. Completion % = (C / |T|) * 100 (0 if |T| == 0).
+4. Active phase = first phase (lowest orderIndex) with at least one incomplete task OR last phase if all completed.
+5. Next priority task = earliest (lowest phase orderIndex, then lowest phasePriority) task where status != done.
+Current Behavior: Aggregated status sums parent + immediate children only (one-level depth). Archived phases excluded from denominator. Unphased legacy tasks (none expected post-backfill) are treated as lowest priority after phased.
+
+Planned Enhancements:
+- Recursive descent beyond one level (depth >1).
+- Caching layer with explicit invalidation on task/phase/project mutations.
+- Configurable inclusion of archived phases (flag).
+
+### 12.6 Caching & Invalidation (Deferred)
+Cache per project: { completionPct, counts, timestamp, version }. Invalidate on:
+1. Task create/update/delete/restore/status change.
+2. Phase archive/restore/reorder.
+3. Project nesting change.
+Status: Not yet implemented. Full recompute performed per request (acceptable at current scale). Strategy remains: LRU + event invalidation; revisit after baseline perf metrics (B-44).
+
+### 12.7 Migration Strategy
+1. Add `phases` table & `phaseId` to `tasks` (nullable initial).
+2. For each project create a default phase with `orderIndex=0`.
+3. Backfill existing tasks with corresponding default phaseId (B-43).
+4. Enforce NOT NULL on `tasks.phaseId` in a follow-up migration after verification (two-step hardening).
+5. Add `parentProjectId` column (nullable) with index & cycle-prevention constraint (validated at application layer).
+
+### 12.8 Validation & Guards
+1. Moving task to phase: phase.projectId must match task.projectId.
+2. Nested project cannot set parent to self or descendant.
+3. Archiving phase with incomplete tasks: allowed but excluded from active roll-up; tasks remain individually queryable.
+4. Deleting (soft) a task in completed state still affects denominator; roll-up recomputed.
+
+### 12.9 UI Enhancements
+1. Phase panel: list + create + reorder (progressive enhancement fallback: up/down buttons).
+2. Status readout card: active phase name, completion progress bar, active tasks count, quick link to next task.
+3. Project metadata modal: edit rubric/security/devOps links (role-gated future).
+4. Markdown rendering (basic) with sanitization & link target blank for external.
+
+### 12.10 Testing Strategy (B-41)
+Unit Tests:
+- Completion % correctness (0%, partial, 100%).
+- Nested project inclusion & exclusion of archived phases.
+- Reorder stability (no duplicate or skipped orderIndex values).
+- Phase archive effect on roll-up denominator.
+- Cycle detection in project nesting.
+Integration Tests:
+- Status readout endpoint returns expected snapshot after each mutation type.
+- Migration backfill correctness (all legacy tasks assigned a phase).
+
+### 12.11 Acceptance Criteria Summary
+1. Can create/reorder/archive phases; tasks can move between phases.
+2. Roll-up completion % accurate across nested projects (verified by tests).
+3. Status endpoint returns defined JSON schema; UI panel displays values.
+4. Extended metadata persisted & retrievable; markdown fields safely rendered.
+5. Export/import retains phases, ordering, parent relationships, and metadata.
+6. Performance: recompute for project with ≤5k tasks <150ms p95 locally (baseline; optimize if exceeded).
+
+### 12.12 Deferred / Future Considerations
+- Weighted phases (custom weighting vs equal). Not required; potential B-49 later.
+- SLA tracking per phase (elapsed vs planned duration).
+- Historical burn-up chart generation.
+
+---
 
 ---
 End of Project Plan.

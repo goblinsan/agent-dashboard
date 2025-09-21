@@ -7,6 +7,8 @@ export interface ProjectRepository {
   list(includeArchived?: boolean): Project[];
   archive(id: string): void;
   restore(id: string): void;
+  setParent(id: string, parentId: string | null): void;
+  listChildren(parentId: string): Project[];
 }
 
 export class InMemoryProjectRepository implements ProjectRepository {
@@ -28,6 +30,23 @@ export class InMemoryProjectRepository implements ProjectRepository {
   getById(id: string) { return this.store.get(id); }
   list(includeArchived = false): Project[] {
     return [...this.store.values()].filter(p => includeArchived || !p.archivedAt);
+  }
+  setParent(id: string, parentId: string | null) {
+    const proj = this.store.get(id); if (!proj) return;
+    if (parentId === id) throw new Error('CYCLE_SELF');
+    if (parentId) {
+      // cycle detection: walk up parents
+      let current: Project | undefined = this.store.get(parentId);
+      while (current) {
+        if (current.id === id) throw new Error('CYCLE_DETECTED');
+        current = current.parentProjectId ? this.store.get(current.parentProjectId) : undefined;
+      }
+    }
+    if (parentId) proj.parentProjectId = parentId; else delete proj.parentProjectId;
+    this.store.set(id, proj);
+  }
+  listChildren(parentId: string): Project[] {
+    return [...this.store.values()].filter(p => p.parentProjectId === parentId);
   }
   archive(id: string) {
     const p = this.store.get(id); if (p && !p.archivedAt && p.id !== 'default') { p.archivedAt = Date.now(); this.store.set(id, p); }

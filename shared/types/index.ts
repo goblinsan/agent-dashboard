@@ -15,10 +15,12 @@ export type TaskStatus = 'todo' | 'in_progress' | 'blocked' | 'done';
 export interface Task {
   id: string;
   projectId?: string; // multi-project scope (defaults to 'default' until feature fully enforced)
+  phaseId?: string; // links task to a Phase (slice 1: optional until backfill migration enforces)
   title: string;
   description?: string;
   status: TaskStatus;
   priority?: 'low' | 'medium' | 'high' | 'critical';
+  phasePriority?: number; // ordering within a phase (dense ascending). Future: supersedes legacy priority for intra-phase ordering.
   owner?: string; // singular primary owner for accountability
   assignees: string[]; // optional collaborators
   createdAt: number; // epoch ms
@@ -126,4 +128,16 @@ export interface Project {
   description?: string;
   createdAt: number; // epoch ms
   archivedAt?: number; // epoch ms if archived
+  parentProjectId?: string; // optional parent for nested roll-up
+}
+
+// Phase (Slice 1 introduction) - ordered execution lane within a project
+export interface Phase {
+  id: string;
+  projectId: string;
+  name: string;
+  description?: string;
+  orderIndex: number; // lower = earlier
+  createdAt: number;
+  archivedAt?: number;
 }
