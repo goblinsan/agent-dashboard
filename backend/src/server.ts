@@ -97,6 +97,19 @@ function auth(req: Request, res: Response, next: NextFunction) {
   next();
 }
 
+// Role enforcement (opt-in via ENFORCE_ROLES=1). Evaluated per-request so tests can toggle env dynamically.
+function requireRoles(allowed: string[]) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    if (process.env.ENFORCE_ROLES !== '1') return next();
+    const agent: Agent | undefined = (req as any).agent;
+    const role = agent?.role;
+    if (!role || !allowed.includes(role)) {
+      return fail(res, new ApiError('forbidden', 403, 'forbidden'));
+    }
+    return next();
+  };
+}
+
 const transitionSchema = z.object({
   newStatus: z.enum(['in_progress', 'blocked', 'done']),
   rationale: z.string().min(5).max(1200),
@@ -133,11 +146,8 @@ app.post('/agents/register', (req: Request, res: Response) => {
 
 app.get('/tasks', auth, (req: Request, res: Response) => {
   const status = req.query.status as string | undefined;
-  let list = taskRepo.list();
-  if (status) {
-    const normalized = status.replace(/^open$/, 'todo').replace(/^completed$/, 'done');
-  list = list.filter((t: any) => t.status === normalized);
-  }
+  const includeDeleted = req.query.includeDeleted === '1';
+  let list = taskRepo.list ? taskRepo.list({ status: status ? status.replace(/^open$/, 'todo').replace(/^completed$/, 'done') : undefined, includeDeleted }) : taskRepo.list();
   return ok(res, list);
 });
 
@@ -174,7 +184,11 @@ app.post('/tasks/:id/transition', auth, (req: Request, res: Response) => {
   return ok(res, task);
 });
 
-app.get('/bugs', auth, (_req: Request, res: Response) => ok(res, bugRepo.list()));
+app.get('/bugs', auth, (req: Request, res: Response) => {
+  const includeDeleted = req.query.includeDeleted === '1';
+  if (bugRepo.list.length === 0) return ok(res, []);
+  return ok(res, bugRepo.list({ includeDeleted }));
+});
 
 app.post('/bugs', auth, (req: Request, res: Response) => {
   const parse = bugSchema.safeParse(req.body);
@@ -273,12 +287,14 @@ const designNoteSchema = z.object({
 app.get('/design-notes', auth, (req: Request, res: Response) => {
   const limit = Math.min(Number(req.query.limit) || 50, 200);
   const offset = Math.max(Number(req.query.offset) || 0, 0);
-  const notes = designNoteRepo.list(10000); // large cap, then paginate from newest
+  const includeDeleted = req.query.includeDeleted === '1';
+  const notes = designNoteRepo.list(10000, { includeDeleted }); // large cap, then paginate from newest
   const window = notes.slice(-(offset + limit)).slice(0, limit);
   return ok(res, window);
 });
 
-app.post('/design-notes', auth, (req: Request, res: Response) => {
+// Restrict design note creation to architect or pm roles when enforcement enabled
+app.post('/design-notes', auth, requireRoles(['architect','pm']), (req: Request, res: Response) => {
   const parsed = designNoteSchema.safeParse(req.body);
   if (!parsed.success) return fail(res, new ApiError('validation_failed', 400, 'validation_failed', parsed.error.flatten()));
   const agent: Agent = (req as any).agent;
@@ -287,6 +303,77 @@ app.post('/design-notes', auth, (req: Request, res: Response) => {
   broadcast({ type: 'design_note.created', note });
   return ok(res, note, 201);
 });
+
+// Soft delete endpoints
+app.delete('/tasks/:id', auth, (req: Request, res: Response) => {
+  const task = taskRepo.getById(req.params.id, true);
+  if (!task) return fail(res, new ApiError('not_found', 404));
+  if (task.deletedAt) return ok(res, { alreadyDeleted: true });
+  if (taskRepo.softDelete) taskRepo.softDelete(task.id); else { task.deletedAt = Date.now(); taskRepo.save(task); }
+  pushAudit({ id: nanoid(10), actor: (req as any).agent.id, entity: 'task', entityId: task.id, action: 'soft_deleted', at: Date.now() });
+  return ok(res, { deleted: true });
+});
+app.post('/tasks/:id/restore', auth, (req: Request, res: Response) => {
+  const task = taskRepo.getById(req.params.id, true);
+  if (!task) return fail(res, new ApiError('not_found', 404));
+  if (!task.deletedAt) return ok(res, { alreadyActive: true });
+  if (taskRepo.restore) taskRepo.restore(task.id); else { delete (task as any).deletedAt; taskRepo.save(task); }
+  pushAudit({ id: nanoid(10), actor: (req as any).agent.id, entity: 'task', entityId: task.id, action: 'restored', at: Date.now() });
+  return ok(res, { restored: true });
+});
+
+app.delete('/bugs/:id', auth, (req: Request, res: Response) => {
+  const bug = bugRepo.getById(req.params.id, true);
+  if (!bug) return fail(res, new ApiError('not_found', 404));
+  if (bug.deletedAt) return ok(res, { alreadyDeleted: true });
+  if (bugRepo.softDelete) bugRepo.softDelete(bug.id); else { bug.deletedAt = Date.now(); bugRepo.save(bug); }
+  pushAudit({ id: nanoid(10), actor: (req as any).agent.id, entity: 'bug', entityId: bug.id, action: 'soft_deleted', at: Date.now() });
+  return ok(res, { deleted: true });
+});
+app.post('/bugs/:id/restore', auth, (req: Request, res: Response) => {
+  const bug = bugRepo.getById(req.params.id, true);
+  if (!bug) return fail(res, new ApiError('not_found', 404));
+  if (!bug.deletedAt) return ok(res, { alreadyActive: true });
+  if (bugRepo.restore) bugRepo.restore(bug.id); else { delete (bug as any).deletedAt; bugRepo.save(bug); }
+  pushAudit({ id: nanoid(10), actor: (req as any).agent.id, entity: 'bug', entityId: bug.id, action: 'restored', at: Date.now() });
+  return ok(res, { restored: true });
+});
+
+app.delete('/design-notes/:id', auth, (req: Request, res: Response) => {
+  const dn = designNoteRepo.getById ? designNoteRepo.getById(req.params.id, true) : undefined;
+  if (!dn) return fail(res, new ApiError('not_found', 404));
+  if (dn.deletedAt) return ok(res, { alreadyDeleted: true });
+  if (designNoteRepo.softDelete) designNoteRepo.softDelete(dn.id); else { dn.deletedAt = Date.now(); designNoteRepo.save && designNoteRepo.save(dn); }
+  pushAudit({ id: nanoid(10), actor: (req as any).agent.id, entity: 'design_note', entityId: dn.id, action: 'soft_deleted', at: Date.now() });
+  return ok(res, { deleted: true });
+});
+app.post('/design-notes/:id/restore', auth, (req: Request, res: Response) => {
+  const dn = designNoteRepo.getById ? designNoteRepo.getById(req.params.id, true) : undefined;
+  if (!dn) return fail(res, new ApiError('not_found', 404));
+  if (!dn.deletedAt) return ok(res, { alreadyActive: true });
+  if (designNoteRepo.restore) designNoteRepo.restore(dn.id); else { delete (dn as any).deletedAt; designNoteRepo.save && designNoteRepo.save(dn); }
+  pushAudit({ id: nanoid(10), actor: (req as any).agent.id, entity: 'design_note', entityId: dn.id, action: 'restored', at: Date.now() });
+  return ok(res, { restored: true });
+});
+
+// Static dashboard (Phase 4) - serve files from /public if present
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
+// Resolve public directory relative to this server file so it works regardless of CWD
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const publicDir = path.resolve(__dirname, '../public');
+if (fs.existsSync(publicDir)) {
+  app.use(express.static(publicDir, { extensions: ['html'] }));
+}
+// Explicit root handler to ensure dashboard served even if static middleware misses
+const indexFile = path.join(publicDir, 'index.html');
+if (fs.existsSync(indexFile)) {
+  app.get('/', (_req: Request, res: Response) => {
+    res.sendFile(indexFile);
+  });
+}
 
 // Fallback 404
 app.use((req, res) => fail(res, new ApiError('not_found', 404, `Route ${req.method} ${req.path} not found`)));
