@@ -1,6 +1,8 @@
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import { nanoid } from 'nanoid';
+import { InMemoryTaskRepository } from './repositories/taskRepository.js';
+import { InMemoryBugRepository } from './repositories/bugRepository.js';
 import { WebSocketServer, WebSocket } from 'ws';
 import { z } from 'zod';
 
@@ -13,16 +15,16 @@ interface Bug { id: string; title: string; severity: 'low' | 'medium' | 'high' |
 interface Guideline { id: string; category: string; version: number; content: string; updatedAt: number; }
 
 const agents = new Map<string, Agent>();
-const tasks = new Map<string, Task>();
-const bugs = new Map<string, Bug>();
+// Legacy direct Maps replaced by repositories
+const taskRepo = new InMemoryTaskRepository();
+const bugRepo = new InMemoryBugRepository();
 const guidelines = new Map<string, Guideline>();
 const auditLog: { id: string; actor: string; entity: string; entityId: string; action: string; at: number; diff?: any }[] = [];
 
 // Seed data
 const baseGuideline: Guideline = { id: 'g-base', category: 'general', version: 1, content: 'Initial guidelines. Refer to AGENT_GUIDELINES.md', updatedAt: Date.now() };
 guidelines.set(baseGuideline.id, baseGuideline);
-const sampleTask: Task = { id: 'T-1', title: 'Implement core API', status: 'todo', version: 1, assignees: [], rationaleLog: [] };
-tasks.set(sampleTask.id, sampleTask);
+const sampleTask = taskRepo.create({ title: 'Implement core API' });
 
 const app = express();
 app.use(cors());
@@ -78,10 +80,10 @@ app.post('/agents/register', (req: Request, res: Response) => {
 
 app.get('/tasks', auth, (req: Request, res: Response) => {
   const status = req.query.status as string | undefined;
-  let list = [...tasks.values()];
+  let list = taskRepo.list();
   if (status) {
     const normalized = status.replace(/^open$/, 'todo').replace(/^completed$/, 'done');
-    list = list.filter(t => t.status === normalized);
+  list = list.filter(t => t.status === normalized);
   }
   return ok(res, list);
 });
@@ -89,11 +91,9 @@ app.get('/tasks', auth, (req: Request, res: Response) => {
 app.post('/tasks', auth, (req: Request, res: Response) => {
   const { title, priority } = req.body || {};
   if (!title) return fail(res, new ApiError('title_required', 400));
-  const id = 'T-' + nanoid(6);
-  const task: Task = { id, title, status: 'todo', version: 1, assignees: [], priority, rationaleLog: [] };
-  tasks.set(id, task);
+  const task = taskRepo.create({ title, priority });
   const actor = (req as any).agent?.id || 'system';
-  auditLog.push({ id: nanoid(10), actor, entity: 'task', entityId: id, action: 'created', at: Date.now(), diff: { status: { to: 'todo' } } });
+  auditLog.push({ id: nanoid(10), actor, entity: 'task', entityId: task.id, action: 'created', at: Date.now(), diff: { status: { to: 'todo' } } });
   broadcast({ type: 'task.created', task });
   return ok(res, task, 201);
 });
@@ -102,7 +102,7 @@ app.post('/tasks/:id/transition', auth, (req: Request, res: Response) => {
   const parse = transitionSchema.safeParse(req.body);
   if (!parse.success) return fail(res, new ApiError('validation_failed', 400, 'validation_failed', parse.error.flatten()));
   const agent: Agent = (req as any).agent;
-  const task = tasks.get(req.params.id);
+  const task = taskRepo.getById(req.params.id);
   if (!task) return fail(res, new ApiError('not_found', 404));
   const { newStatus, rationale, confidence, expectedVersion } = parse.data;
   if (task.version !== expectedVersion) return fail(res, new ApiError('version_conflict', 409, 'version_conflict', { currentVersion: task.version }));
@@ -116,18 +116,17 @@ app.post('/tasks/:id/transition', auth, (req: Request, res: Response) => {
   const entry = `[${new Date().toISOString()}] ${agent.id} -> ${newStatus} :: ${rationale}${confidence !== undefined ? ` (conf=${confidence})` : ''}`;
   task.rationaleLog.push(entry);
   auditLog.push({ id: nanoid(10), actor: agent.id, entity: 'task', entityId: task.id, action: 'status_change', at: Date.now(), diff: { status: { from: prevStatus, to: newStatus } } });
+  taskRepo.save(task);
   broadcast({ type: 'task.updated', task });
   return ok(res, task);
 });
 
-app.get('/bugs', auth, (_req: Request, res: Response) => ok(res, [...bugs.values()]));
+app.get('/bugs', auth, (_req: Request, res: Response) => ok(res, bugRepo.list()));
 
 app.post('/bugs', auth, (req: Request, res: Response) => {
   const parse = bugSchema.safeParse(req.body);
   if (!parse.success) return fail(res, new ApiError('validation_failed', 400, 'validation_failed', parse.error.flatten()));
-  const id = 'B-' + nanoid(6);
-  const bug: Bug = { id, ...parse.data, createdAt: Date.now() };
-  bugs.set(id, bug);
+  const bug = bugRepo.create({ title: parse.data.title, severity: parse.data.severity, taskId: parse.data.taskId, reproSteps: parse.data.reproSteps, proposedFix: parse.data.proposedFix });
   broadcast({ type: 'bug.created', bug });
   return ok(res, bug, 201);
 });
@@ -146,7 +145,7 @@ app.post('/agents/:id/heartbeat', auth, (req: Request, res: Response) => {
 const startTime = Date.now();
 const apiVersion = '0.1.0';
 
-app.get('/health', (_req: Request, res: Response) => ok(res, { tasks: tasks.size, agents: agents.size, version: apiVersion, ts: Date.now() }));
+app.get('/health', (_req: Request, res: Response) => ok(res, { tasks: taskRepo.list().length, agents: agents.size, version: apiVersion, ts: Date.now() }));
 
 app.get('/healthz', (_req: Request, res: Response) => {
   const now = Date.now();
@@ -154,7 +153,7 @@ app.get('/healthz', (_req: Request, res: Response) => {
     status: 'ok',
     version: apiVersion,
     uptimeMs: now - startTime,
-    counts: { tasks: tasks.size, agents: agents.size, bugs: bugs.size },
+    counts: { tasks: taskRepo.list().length, agents: agents.size, bugs: bugRepo.list().length },
     timestamp: now
   });
 });
@@ -193,4 +192,4 @@ wss.on('connection', (ws: WebSocket) => {
   ws.send(JSON.stringify({ type: 'hello', ts: Date.now() }));
 });
 
-export { app, agents, tasks, bugs, guidelines, auditLog };
+export { app, agents, taskRepo, bugRepo, guidelines, auditLog };

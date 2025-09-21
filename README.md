@@ -19,10 +19,12 @@ npm run dev   # (if a dev script is later added) or: npx ts-node src/server.ts
 Server defaults to `http://localhost:4000`.
 
 ### Health Endpoints
-| Endpoint | Description | Example |
-|----------|-------------|---------|
-| `GET /health` | Basic counts & version | `{ ok: true, tasks: 0, agents: 0, version: "0.1.0" }` |
-| `GET /healthz` | Rich uptime payload | `{ status: 'ok', uptimeMs: 12345, counts: {...} }` |
+All responses follow the standard envelope: `{ success: true, data: ... }` or `{ success: false, error: { code, message, details? } }`.
+
+| Endpoint | Description | Example (truncated) |
+|----------|-------------|---------------------|
+| `GET /health` | Basic counts & version | `{ "success": true, "data": { "tasks": 1, "agents": 0, "version": "0.1.0" }}` |
+| `GET /healthz` | Rich uptime payload | `{ "success": true, "data": { "status":"ok","uptimeMs":12345,... }}` |
 
 ### Agent Registration Flow
 1. `POST /agents/register { name, role }` → returns `{ id, apiKey }`.
@@ -31,11 +33,43 @@ Server defaults to `http://localhost:4000`.
 ### Example (cURL)
 ```bash
 curl -s -X POST http://localhost:4000/agents/register \
-	-H 'Content-Type: application/json' \
-	-d '{"name":"build-bot","role":"dev"}'
+  -H 'Content-Type: application/json' \
+  -d '{"name":"build-bot","role":"dev"}'
 
 API_KEY=... # from previous output
 curl -s -H "x-api-key: $API_KEY" http://localhost:4000/healthz | jq
+
+### Standard Response Envelope
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `success` | boolean | True on success, false on failure |
+| `data` | any | Present only when `success=true` |
+| `error.code` | string | Machine-readable stable error code |
+| `error.message` | string | Human-readable (may match code) |
+| `error.details` | object | Optional structured validation/context |
+
+Error example (invalid transition):
+```json
+{
+	"success": false,
+	"error": { "code": "invalid_transition", "message": "invalid_transition" }
+}
+```
+
+### Common Error Codes
+| Code | Meaning |
+|------|---------|
+| `missing_api_key` | Auth header absent |
+| `invalid_api_key` | API key not recognized |
+| `name_required` | Agent registration missing name |
+| `title_required` | Task creation missing title |
+| `validation_failed` | Schema validation error (see `error.details`) |
+| `version_conflict` | Optimistic concurrency mismatch |
+| `invalid_transition` | Disallowed status change |
+| `not_found` | Resource or route not found |
+| `forbidden` | Actor not permitted |
+| `internal_error` | Unhandled server exception |
 ```
 
 ### Architectural Tenets (Excerpt)

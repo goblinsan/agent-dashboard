@@ -1,6 +1,6 @@
 # Project Plan: AI Agent Dashboard
 
-Last Updated: 2025-09-20T12:00:00Z
+Last Updated: 2025-09-20T22:40:00Z
 Auto-Refresh Directive: After any task moves to Done, the responsible agent MUST (a) update status fields, (b) add emergent follow-up tasks, (c) prune obsolete tasks, and (d) refresh the Logical Next Steps section timestamp.
 
 ## 1. Vision & High-Level Goal
@@ -62,8 +62,8 @@ Acceptance Criteria:
 | P0-5 | Backend health endpoint | Dev | Done | Medium | 2025-09-20 | `/health` + `/healthz` added |
 | P0-6 | ADR template added | Architect | Done | Low | 2025-09-20 | `docs/adr/ADR-Template.md` |
 | P0-7 | README expansion | PM | Done | Medium | 2025-09-20 | Added quick start & references |
-| P0-8 | Status enum migration plan | Architect | Todo | Medium | 2025-09-21 | Align backend open/completed -> todo/done |
-| P0-9 | Introduce audit log scaffold | Dev | Todo | Medium | 2025-09-21 | Prepare for Phase 1 logging |
+| P0-8 | Status enum migration plan | Architect | Done | Medium | 2025-09-20 | Implemented; backward compat mapping in server |
+| P0-9 | Introduce audit log scaffold | Dev | Done | Medium | 2025-09-20 | In-memory audit entries + /audit endpoint |
 
 ### Phase 1: MVP Task & Bug CRUD API
 Purpose: Provide minimal REST API for tasks and bug reports consumed by agents.
@@ -79,14 +79,19 @@ Acceptance Criteria:
 #### Task Tracker (Phase 1)
 | ID | Task | Owner | Status | Priority | ETA | Notes |
 |----|------|-------|--------|----------|-----|-------|
-| P1-1 | Define OpenAPI spec draft | Architect | Todo | High | 2025-09-22 | Start with Tasks only |
+| P1-1 | Define OpenAPI spec draft | Architect | In-Progress | High | 2025-09-22 | Initial draft committed; needs error schemas & envelopes refinement done |
 | P1-2 | Implement task repository | Dev | Todo | High | 2025-09-22 | In-memory map |
 | P1-3 | Implement bug repository | Dev | Todo | High | 2025-09-22 | Mirror task pattern |
-| P1-4 | REST handlers & routing | Dev | Todo | High | 2025-09-23 | Express / Fastify TBD |
-| P1-5 | Validation middleware | Dev | Todo | High | 2025-09-23 | Zod or custom |
-| P1-6 | Logging & audit trail | Dev | Todo | Medium | 2025-09-23 | Simple append JSONL |
+| P1-4 | REST handlers & routing | Dev | In-Progress | High | 2025-09-23 | Basic handlers exist; will refactor to repositories |
+| P1-5 | Validation middleware | Dev | Done | High | 2025-09-20 | Zod schemas for transitions & bugs |
+| P1-6 | Logging & audit trail | Dev | In-Progress | Medium | 2025-09-23 | In-memory implemented; needs pruning & pagination beyond limit param |
 | P1-7 | OpenAPI publish script | DevOps | Todo | Medium | 2025-09-24 | Generate & commit |
 | P1-8 | Minimal README usage section | PM | Todo | Medium | 2025-09-24 | Curl examples |
+| P1-9 | Standard response envelope & error handler | Dev | Done | High | 2025-09-20 | Implemented; all endpoints wrapped |
+| P1-10 | Error schemas in OpenAPI | Architect | In-Progress | High | 2025-09-22 | Partially added for transition endpoint; propagate to all |
+| P1-11 | Audit endpoint pagination & pruning policy | Dev | Todo | Medium | 2025-09-23 | Add pruning strategy + ADR |
+| P1-12 | Negative tests (invalid transitions/version conflicts) | QA | Todo | High | 2025-09-22 | Ensure robust failure paths |
+| P1-13 | README envelope documentation | PM | Todo | Medium | 2025-09-21 | Explain success/error shapes |
 
 ### Phase 2: Status Updates & Design Notes
 Purpose: Enable periodic status pings and design docs for alignment.
@@ -183,15 +188,17 @@ Acceptance Criteria:
 | Over-automation early | Waste | Medium | Manual first policy |
 
 ## 8. Logical Next Steps (Auto-Refresh Section)
-Timestamp: 2025-09-20T12:00:00Z
+Timestamp: 2025-09-20T22:40:00Z
 | Priority | Action | Rationale | Owner |
 |----------|--------|-----------|-------|
-| High | Draft OpenAPI spec (P1-1) | Needed before wider client adoption | Architect |
-| High | Implement task repository & handlers (P1-2/P1-4) | Core CRUD path | Dev |
-| High | Implement bug repository (P1-3) | Complete MVP entity pair | Dev |
-| Medium | Add audit trail scaffold (P0-9 / P1-6) | Supports traceability early | Dev |
-| Medium | Migrate status enum (P0-8) | Consistency across backend & shared types | Architect |
-| Low | Add dependency scan script | Early security hygiene | Security |
+| High | Implement task & bug repositories (P1-2/P1-3) | Decouple persistence early | Dev |
+| High | Refactor handlers to use repositories (P1-4) | Prevent Map coupling proliferation | Dev |
+| High | Complete error schema coverage (P1-10) | Contract clarity for clients | Architect |
+| High | Add negative tests (P1-12) | Validate failure & concurrency logic | QA |
+| Medium | Audit pagination + pruning policy (P1-11) | Control memory & improve query | Dev |
+| Medium | README envelope docs (P1-13) | Developer onboarding clarity | PM |
+| Low | OpenAPI publish script (P1-7) | Automate spec distribution | DevOps |
+| Low | Dependency scan script enhancement | Expand security posture | Security |
 
 Refresh Instructions: When any above action completes, update its source table, remove or demote it here, add newly emergent actions, and reset the timestamp to current ISO.
 

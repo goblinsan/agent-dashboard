@@ -41,4 +41,21 @@ describe('Task lifecycle', () => {
   expect(done.body.success).toBe(true);
   expect(done.body.data.status).toBe('done');
   });
+
+  it('rejects invalid direct todo->done transition', async () => {
+    // create fresh task
+    const create = await request(app)
+      .post('/tasks')
+      .set('x-api-key', apiKey)
+      .send({ title: 'Another Task' })
+      .expect(201);
+    const taskId = create.body.data.id;
+    const invalid = await request(app)
+      .post(`/tasks/${taskId}/transition`)
+      .set('x-api-key', apiKey)
+      .send({ newStatus: 'done', rationale: 'Skip ahead', expectedVersion: 1 })
+      .expect(400);
+    expect(invalid.body.success).toBe(false);
+    expect(invalid.body.error.code).toBe('invalid_transition');
+  });
 });
