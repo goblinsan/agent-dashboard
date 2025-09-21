@@ -82,11 +82,100 @@ Error example (invalid transition):
 See `shared/types/index.ts` for `Task`, `BugReport`, `StatusUpdate`, `DesignNote`, and `AuditEntry` definitions.
 
 ## API Specification
-An evolving OpenAPI spec lives at `backend/openapi.yaml`. Keep this file updated with any new endpoints or schema changes before merging functional changes.
+An evolving OpenAPI spec lives at `backend/openapi.yaml` (current: 0.3.2). Keep this file updated with any new endpoints or schema changes before merging functional changes.
 
 Status enum has been migrated to: `todo | in_progress | blocked | done` (legacy `open/completed` still accepted only via query normalization temporarily).
 
-## Contributing Workflow (Condensed)
+### OpenAPI Linting
+Run Spectral against the spec to catch contract issues:
+```bash
+cd backend
+npm run lint:openapi
+```
+CI integration (planned) will enforce a clean lint before merge.
+
+### Audit Retention
+The audit log is in-memory and automatically pruned to a maximum size.
+
+Environment variable:
+`MAX_AUDIT_ENTRIES` (default: `5000`)
+
+Behavior: When the cap is exceeded, oldest entries are removed in a single splice so memory usage stays roughly bounded. See `docs/adr/ADR-0002-audit-log-retention.md`.
+
+Querying:
+`GET /audit?limit=100` (max 500) returns the most recent entries (bounded by limit and retention window).
+
+### Core Task & Bug Examples
+Assuming you have an `API_KEY` from agent registration.
+```bash
+# Create a task
+curl -s -X POST http://localhost:4000/tasks \
+	-H "x-api-key: $API_KEY" -H 'Content-Type: application/json' \
+	-d '{"title":"Investigate memory usage","priority":"high"}' | jq
+
+# Transition task (optimistic concurrency - version must match)
+TASK_ID=... # from previous output
+VERSION=0   # initial version
+curl -s -X POST http://localhost:4000/tasks/$TASK_ID/transition \
+	-H "x-api-key: $API_KEY" -H 'Content-Type: application/json' \
+	-d '{"newStatus":"in_progress","rationale":"Starting work","expectedVersion":'$VERSION'}' | jq
+
+# Report a bug
+curl -s -X POST http://localhost:4000/bugs \
+	-H "x-api-key: $API_KEY" -H 'Content-Type: application/json' \
+	-d '{"title":"Crash on save","severity":"high","reproSteps":["Open app","Click Save","Observe crash"]}' | jq
+
+# Update a bug (optimistic concurrency)
+BUG_ID=... # from previous bug creation
+BUG_VERSION=1 # initial bug version (1 on creation)
+curl -s -X PATCH http://localhost:4000/bugs/$BUG_ID \
+  -H "x-api-key: $API_KEY" -H 'Content-Type: application/json' \
+  -d '{"proposedFix":"Guard null pointer","expectedVersion":'$BUG_VERSION'}' | jq
+
+# Version conflict example (reusing old version)
+curl -s -X PATCH http://localhost:4000/bugs/$BUG_ID \
+  -H "x-api-key: $API_KEY" -H 'Content-Type: application/json' \
+  -d '{"proposedFix":"Another change","expectedVersion":'$BUG_VERSION'}' | jq
+
+# Post a global status update
+curl -s -X POST http://localhost:4000/status-updates \
+	-H "x-api-key: $API_KEY" -H 'Content-Type: application/json' \
+	-d '{"message":"Build pipeline green"}' | jq
+
+# Post a task-scoped status update
+curl -s -X POST http://localhost:4000/status-updates \
+	-H "x-api-key: $API_KEY" -H 'Content-Type: application/json' \
+	-d '{"message":"Refactoring in progress","taskId":"'$TASK_ID'"}' | jq
+
+# Fetch last 10 status updates since a timestamp
+SINCE=$(date +%s%3N) # capture current epoch ms
+curl -s -H "x-api-key: $API_KEY" "http://localhost:4000/status-updates?limit=10&since=$SINCE" | jq
+
+# Offset pagination: skip newest 10, get next 5
+curl -s -H "x-api-key: $API_KEY" "http://localhost:4000/status-updates?limit=5&offset=10" | jq
+
+# Create a design note
+curl -s -X POST http://localhost:4000/design-notes \
+	-H "x-api-key: $API_KEY" -H 'Content-Type: application/json' \
+	-d '{"title":"Select persistence layer","context":"Need simple local dev store","decision":"Use SQLite first","consequences":"Low ops overhead, later migration path"}' | jq
+
+# List design notes (limit 5)
+curl -s -H "x-api-key: $API_KEY" "http://localhost:4000/design-notes?limit=5" | jq
+
+# Offset pagination for design notes: second page (items 6-10 if they exist)
+curl -s -H "x-api-key: $API_KEY" "http://localhost:4000/design-notes?limit=5&offset=5" | jq
+```
+
+### Pagination Model
+Offset pagination is applied from the newest items (reverse chronological) for status updates and design notes.
+Formula (conceptually): take full list sorted oldest→newest, slice from the end with `offset + limit`, then take first `limit` of that slice → stable windows relative to newest.
+
+Fields:
+- `limit` (default 50, cap 200)
+- `offset` (default 0) counts how many newest items to skip
+- `since` (status updates only) filters by creation time before pagination windowing
+
+### Contributing Workflow (Condensed)
 1. Select a Todo task from plan; move to In-Progress.
 2. Implement minimal change + tests (when harness present).
 3. Update plan & Logical Next Steps timestamp.
@@ -105,6 +194,73 @@ Full details in `PROJECT_PLAN.md`.
 
 ## Security (Early)
 Basic dependency scanning & validation layering planned. See Security Agent persona.
+
+## Continuous Integration
+A GitHub Actions workflow (`.github/workflows/ci.yml`) runs on pushes and PRs to `main`:
+- Install workspace dependencies
+- Build & test backend (`ci:verify`)
+- Lint OpenAPI spec
+- Publish versioned OpenAPI file to `dist/` and upload artifact
+- Generate dependency vulnerability report (`audit-report.json`) and upload as artifact
+
+To replicate locally:
+```bash
+cd backend
+npm run ci:verify   # produces dist + audit-report.json
+```
+Artifacts:
+- `openapi-spec` (downloadable YAMLs)
+- `dependency-audit` (JSON vulnerability summary)
+
+## Dependency Audit Format
+The script `scripts/dependency-scan.cjs` normalizes `npm audit --json` output into:
+```json
+{
+  "generatedAt": 1720000000000,
+  "advisories": [
+    { "id": 123, "module": "example", "severity": "moderate", "title": "Prototype Pollution", "url": "https://...", "vulnerable_versions": "<2.0.0", "recommendation": "Update available" }
+  ],
+  "meta": { "total": 1, "severities": { "low":0, "moderate":1, "high":0, "critical":0 } }
+}
+```
+Enforcement (e.g., failing on high/critical) can be added later by post-processing this JSON.
+
+## Persistence (Phase 3 - Experimental)
+Default runtime remains in-memory. Enable SQLite persistence by setting `PERSISTENCE=sqlite` (and running migrations) once native dependency installs successfully.
+
+### Enabling SQLite
+```bash
+cd backend
+npm install   # ensure build tools installed (see below)
+npm run migrate
+PERSISTENCE=sqlite npm run dev
+```
+Data file defaults to `backend/data/agent-dashboard.db`.
+
+### Windows / Native Build Requirements
+`better-sqlite3` builds native bindings. On Windows you need:
+- Visual Studio 2022 (or Build Tools) with "Desktop development with C++" workload
+- Latest Windows 10/11 SDK
+- Python 3 installed and on PATH
+- (Optional) Use Node LTS (v20.x) if prebuilt binaries lag for newer Node releases
+
+After installing tooling:
+```bash
+npm rebuild better-sqlite3
+```
+
+If install fails, the server automatically falls back to in-memory and logs a warning at startup.
+
+### Migrations
+Migrations live in `backend/migrations/*.sql` and are applied by `npm run migrate` which records applied files in `_migrations` table.
+
+### Current Coverage
+Implemented repositories (SQLite): Tasks, Bugs (StatusUpdates & DesignNotes still in-memory until finalized schema adaptation).
+
+### Roadmap
+- Add SQLite status updates & design notes repos
+- Optional: Persist audit log
+- Export/import JSON utility for portability
 
 ## License
 TBD (add license file if open sourcing publicly).

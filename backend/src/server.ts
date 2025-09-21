@@ -17,11 +17,43 @@ interface Bug { id: string; title: string; severity: 'low' | 'medium' | 'high' |
 interface Guideline { id: string; category: string; version: number; content: string; updatedAt: number; }
 
 const agents = new Map<string, Agent>();
-// Legacy direct Maps replaced by repositories
-const taskRepo = new InMemoryTaskRepository();
-const bugRepo = new InMemoryBugRepository();
-const statusUpdateRepo = new InMemoryStatusUpdateRepository();
-const designNoteRepo = new InMemoryDesignNoteRepository();
+// Persistence selection (in-memory default)
+const useSqlite = process.env.PERSISTENCE === 'sqlite';
+let taskRepo: any;
+let bugRepo: any;
+let statusUpdateRepo: any;
+let designNoteRepo: any;
+if (useSqlite) {
+  try {
+    // Dynamic import to avoid runtime error if dependency missing
+    const { SqliteTaskRepository, SqliteBugRepository } = await import('./repositories/sqliteRepositories.js').catch(() => ({} as any));
+    if (SqliteTaskRepository && SqliteBugRepository) {
+      taskRepo = new SqliteTaskRepository();
+      bugRepo = new SqliteBugRepository();
+      // For now fall back to in-memory for status updates & design notes until sqlite versions added
+      statusUpdateRepo = new InMemoryStatusUpdateRepository();
+      designNoteRepo = new InMemoryDesignNoteRepository();
+      console.log('[persistence] SQLite enabled');
+    } else {
+      console.warn('[persistence] SQLite requested but repository module unavailable – falling back to in-memory');
+      taskRepo = new InMemoryTaskRepository();
+      bugRepo = new InMemoryBugRepository();
+      statusUpdateRepo = new InMemoryStatusUpdateRepository();
+      designNoteRepo = new InMemoryDesignNoteRepository();
+    }
+  } catch (err) {
+    console.warn('[persistence] SQLite initialization failed – using in-memory. Error:', (err as any)?.message);
+    taskRepo = new InMemoryTaskRepository();
+    bugRepo = new InMemoryBugRepository();
+    statusUpdateRepo = new InMemoryStatusUpdateRepository();
+    designNoteRepo = new InMemoryDesignNoteRepository();
+  }
+} else {
+  taskRepo = new InMemoryTaskRepository();
+  bugRepo = new InMemoryBugRepository();
+  statusUpdateRepo = new InMemoryStatusUpdateRepository();
+  designNoteRepo = new InMemoryDesignNoteRepository();
+}
 const guidelines = new Map<string, Guideline>();
 const auditLog: { id: string; actor: string; entity: string; entityId: string; action: string; at: number; diff?: any }[] = [];
 const MAX_AUDIT_ENTRIES = parseInt(process.env.MAX_AUDIT_ENTRIES || '5000', 10);
@@ -104,7 +136,7 @@ app.get('/tasks', auth, (req: Request, res: Response) => {
   let list = taskRepo.list();
   if (status) {
     const normalized = status.replace(/^open$/, 'todo').replace(/^completed$/, 'done');
-  list = list.filter(t => t.status === normalized);
+  list = list.filter((t: any) => t.status === normalized);
   }
   return ok(res, list);
 });
@@ -215,7 +247,7 @@ app.get('/status-updates', auth, (req: Request, res: Response) => {
   const taskId = req.query.taskId as string | undefined;
   const since = req.query.since ? Number(req.query.since) : undefined;
   let list = statusUpdateRepo.list(10000, taskId); // pull full for filter then slice
-  if (since) list = list.filter(u => u.createdAt >= since);
+  if (since) list = list.filter((u: any) => u.createdAt >= since);
   const window = list.slice(-(offset + limit)).slice(0, limit); // slice from end applying offset
   return ok(res, window);
 });

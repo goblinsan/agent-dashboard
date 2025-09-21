@@ -13,9 +13,12 @@
     "scan:json": "node scripts/dependency-scan.cjs",
     "lint:openapi": "npx spectral lint openapi.yaml",
     "openapi:publish": "node scripts/publish-openapi.cjs",
-    "ci:verify": "npm run build && npm run test && npm run lint:openapi && npm run openapi:publish && npm run scan:json"
+    "migrate": "node scripts/migrate.cjs",
+    "dev:sqlite": "PERSISTENCE=sqlite npm run migrate && PERSISTENCE=sqlite npm run dev",
+    "ci:verify": "npm run build && npm run test && npm run lint:openapi && npm run openapi:publish && npm run scan:json && npm run migrate"
   },
   "dependencies": {
+    "better-sqlite3": "^9.4.0",
     "cors": "^2.8.5",
     "express": "^4.19.2",
     "nanoid": "^4.0.2",
@@ -23,6 +26,7 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@stoplight/spectral-cli": "^6.11.1",
     "@types/cors": "^2.8.19",
     "@types/express": "^4.17.21",
     "@types/node": "^20.11.30",
@@ -31,7 +35,6 @@
     "supertest": "^6.3.4",
     "tsx": "^4.7.0",
     "typescript": "^5.4.0",
-    "vitest": "^1.6.0",
-    "@stoplight/spectral-cli": "^6.11.1"
+    "vitest": "^1.6.0"
   }
 }
