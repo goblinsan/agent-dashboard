@@ -14,7 +14,7 @@
     "lint:openapi": "npx spectral lint openapi.yaml",
     "openapi:publish": "node scripts/publish-openapi.cjs",
     "migrate": "node scripts/migrate.cjs",
-    "dev:sqlite": "PERSISTENCE=sqlite npm run migrate && PERSISTENCE=sqlite npm run dev",
+    "dev:sqlite": "cross-env PERSISTENCE=sqlite npm run migrate && cross-env PERSISTENCE=sqlite npm run dev",
     "ci:verify": "npm run build && npm run test && npm run lint:openapi && npm run openapi:publish && npm run scan:json && npm run migrate"
   },
   "dependencies": {
