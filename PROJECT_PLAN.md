@@ -101,14 +101,14 @@ Single authoritative backlog. "Priority" uses P0 (near-term), P1 (important), P2
 | B-31 | In-phase task prioritization | Add `phasePriority` (int) with reorder API; adjust list sorting | P1 | 10 | Done (basic move & ordered listing implemented) |
 | B-32 | Project extended metadata | Fields: highLevelDescription, prioritizationRubric (md/text), securityGuidelines (md), devOps (repoUrl, ciUrl, slackChannel) | P0 | 10 | Todo |
 | B-33 | Nested project support | Add `parentProjectId` + depth validation + roll-up rules | P1 | 10 | Done (in-memory; cycle detection app-layer) |
-| B-34 | Completion roll-up engine | Compute % complete from leaf tasks via phases → projects; cache & invalidate on mutation | P0 | 10 | Partial (aggregation + aggregated caching implemented; multi-level recursion & perf optimizations deferred) |
+| B-34 | Completion roll-up engine | Compute % complete from leaf tasks via phases → projects; cache & invalidate on mutation | P0 | 10 | Partial (multi-level recursion + aggregated caching done; incremental perf optimization deferred) |
 | B-35 | Project status readout API | Endpoint `/projects/:id/status` returning activePhase, completionPct, activeTaskCount, nextPriorityTask | P0 | 10 | Done (extended with optional rollup=1) |
 | B-36 | Status readout UI panel | Surface aggregated status in dashboard; auto-refresh | P1 | 10 | Todo |
 | B-37 | Phase management UI | Create/reorder/archive phases; drag & drop reorder (progressive enhancement) | P1 | 10 | Todo |
 | B-38 | Rubric & security docs UI | Read-only render of markdown fields with basic sanitation | P2 | 10 | Todo |
 | B-39 | Project metadata edit API | PATCH endpoints for rubric/security/devOps links | P1 | 10 | Todo |
 | B-40 | Hierarchical export/import | Extend snapshot format with phases, parentProjectId, phase/task ordering | P1 | 10 | Todo |
-| B-41 | Roll-up test suite | Unit tests for completion math across nested projects & phase/task edge cases | P0 | 10 | Todo |
+| B-41 | Roll-up test suite | Unit tests for completion math across nested projects & phase/task edge cases | P0 | 10 | Partial (multi-level integration test added; edge-case unit tests pending) |
 | B-42 | Data validation guards | Ensure phase.projectId matches task.projectId; prevent cycles in project nesting | P0 | 10 | Todo |
 | B-43 | Migration backfill tasks → default phase | After creating default phase per project, assign tasks lacking phaseId | P0 | 10 | Done (runtime backfill on startup; SQL enforcement deferred) |
 | B-44 | Performance optimization (roll-up) | Incremental invalidation vs full recompute; benchmark >5k tasks | P2 | 10 | Todo |

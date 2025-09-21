@@ -91,16 +91,36 @@ export function computeAggregatedProjectStatus(projectId: string): AggregatedSta
   const base = computeProjectStatus(projectId);
   if (!base) return;
   if (!projectRepo.listChildren) return base;
-  const children = projectRepo.listChildren(projectId).filter((c: any) => !c.archivedAt);
-  if (!children.length) {
+
+  // Collect descendants recursively (excluding archived). We'll keep direct children separate for backward compatibility in rollup.children.
+  const visited = new Set<string>();
+  function collectDescendants(pid: string): string[] {
+    if (!projectRepo.listChildren) return [];
+    const direct = projectRepo.listChildren(pid).filter((c: any) => !c.archivedAt);
+    const result: string[] = [];
+    for (const child of direct) {
+      if (visited.has(child.id)) continue; // guard against unforeseen cycles (should already be prevented) 
+      visited.add(child.id);
+      result.push(child.id);
+      result.push(...collectDescendants(child.id));
+    }
+    return result;
+  }
+  const descendantIds = collectDescendants(projectId);
+  if (descendantIds.length === 0) {
     AGG_STATUS_CACHE.set(projectId, { value: base, ts: Date.now() });
     return base;
   }
-  const childStatuses = children.map((c: any) => computeProjectStatus(c.id)).filter(Boolean) as ProjectStatusSnapshot[];
-  const aggTasks = childStatuses.reduce((s, cs) => s + cs.totals.tasks, 0) + base.totals.tasks;
-  const aggDone = childStatuses.reduce((s, cs) => s + cs.totals.done, 0) + base.totals.done;
+  // Direct children list for rollup.children
+  const directChildren = projectRepo.listChildren(projectId).filter((c: any) => !c.archivedAt);
+  const directChildStatuses = directChildren.map((c: any) => computeProjectStatus(c.id)).filter(Boolean) as ProjectStatusSnapshot[];
+  // All descendants (could include direct) for aggregation math
+  const allDescendantStatuses = descendantIds.map(id => computeProjectStatus(id)).filter(Boolean) as ProjectStatusSnapshot[];
+
+  const aggTasks = allDescendantStatuses.reduce((s, cs) => s + cs.totals.tasks, 0) + base.totals.tasks;
+  const aggDone = allDescendantStatuses.reduce((s, cs) => s + cs.totals.done, 0) + base.totals.done;
   const pct = aggTasks === 0 ? 0 : (aggDone / aggTasks) * 100;
-  const aggregated: AggregatedStatus = { ...base, rollup: { childCount: childStatuses.length, aggregated: { tasks: aggTasks, done: aggDone, completionPct: Number(pct.toFixed(2)) }, children: childStatuses } };
+  const aggregated: AggregatedStatus = { ...base, rollup: { childCount: directChildStatuses.length, aggregated: { tasks: aggTasks, done: aggDone, completionPct: Number(pct.toFixed(2)) }, children: directChildStatuses } };
   AGG_STATUS_CACHE.set(projectId, { value: aggregated, ts: Date.now() });
   return aggregated;
 }
