@@ -16,6 +16,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SuccessHealthz'
+        '500':
+          description: Internal error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /agents/register:
     post:
       summary: Register a new agent
@@ -36,6 +42,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SuccessAgentRegistration'
+        '400':
+          description: Validation error (e.g., name missing)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /tasks:
     get:
       summary: List tasks
@@ -54,6 +72,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SuccessTasks'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '500':
+          description: Internal error
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
     post:
       summary: Create task
       security:
@@ -74,6 +102,21 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/SuccessTask' }
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '500':
+          description: Internal error
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
   /tasks/{id}/transition:
     post:
       summary: Transition task status
@@ -129,6 +172,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SuccessBugs'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '500':
+          description: Internal error
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
     post:
       summary: Create bug report
       security:
@@ -154,6 +207,21 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/SuccessBug' }
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '500':
+          description: Internal error
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
   /audit:
     get:
       summary: Recent audit entries
@@ -175,6 +243,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SuccessAudit'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '500':
+          description: Internal error
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
 components:
   securitySchemes:
     ApiKeyAuth:

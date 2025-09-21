@@ -1,6 +1,6 @@
 # Project Plan: AI Agent Dashboard
 
-Last Updated: 2025-09-20T22:40:00Z
+Last Updated: 2025-09-20T22:48:00Z
 Auto-Refresh Directive: After any task moves to Done, the responsible agent MUST (a) update status fields, (b) add emergent follow-up tasks, (c) prune obsolete tasks, and (d) refresh the Logical Next Steps section timestamp.
 
 ## 1. Vision & High-Level Goal
@@ -80,18 +80,19 @@ Acceptance Criteria:
 | ID | Task | Owner | Status | Priority | ETA | Notes |
 |----|------|-------|--------|----------|-----|-------|
 | P1-1 | Define OpenAPI spec draft | Architect | In-Progress | High | 2025-09-22 | Initial draft committed; needs error schemas & envelopes refinement done |
-| P1-2 | Implement task repository | Dev | Todo | High | 2025-09-22 | In-memory map |
-| P1-3 | Implement bug repository | Dev | Todo | High | 2025-09-22 | Mirror task pattern |
-| P1-4 | REST handlers & routing | Dev | In-Progress | High | 2025-09-23 | Basic handlers exist; will refactor to repositories |
+| P1-2 | Implement task repository | Dev | Done | High | 2025-09-20 | In-memory repo abstraction |
+| P1-3 | Implement bug repository | Dev | Done | High | 2025-09-20 | In-memory repo abstraction |
+| P1-4 | REST handlers & routing | Dev | Done | High | 2025-09-20 | Refactored to repository layer |
 | P1-5 | Validation middleware | Dev | Done | High | 2025-09-20 | Zod schemas for transitions & bugs |
 | P1-6 | Logging & audit trail | Dev | In-Progress | Medium | 2025-09-23 | In-memory implemented; needs pruning & pagination beyond limit param |
 | P1-7 | OpenAPI publish script | DevOps | Todo | Medium | 2025-09-24 | Generate & commit |
 | P1-8 | Minimal README usage section | PM | Todo | Medium | 2025-09-24 | Curl examples |
 | P1-9 | Standard response envelope & error handler | Dev | Done | High | 2025-09-20 | Implemented; all endpoints wrapped |
-| P1-10 | Error schemas in OpenAPI | Architect | In-Progress | High | 2025-09-22 | Partially added for transition endpoint; propagate to all |
-| P1-11 | Audit endpoint pagination & pruning policy | Dev | Todo | Medium | 2025-09-23 | Add pruning strategy + ADR |
-| P1-12 | Negative tests (invalid transitions/version conflicts) | QA | Todo | High | 2025-09-22 | Ensure robust failure paths |
-| P1-13 | README envelope documentation | PM | Todo | Medium | 2025-09-21 | Explain success/error shapes |
+| P1-10 | Error schemas in OpenAPI | Architect | Done | High | 2025-09-20 | Added standardized error responses for all endpoints |
+| P1-11 | Audit endpoint pagination & pruning policy | Dev | In-Progress | Medium | 2025-09-23 | limit param added; pruning strategy pending |
+| P1-12 | Negative tests (invalid transitions/version conflicts) | QA | Done | High | 2025-09-20 | Added multiple failure path tests |
+| P1-13 | README envelope documentation | PM | Done | Medium | 2025-09-20 | Envelope + error codes documented |
+| P1-14 | Repository abstraction ADR | Architect | Done | Low | 2025-09-20 | ADR-0001 committed |
 
 ### Phase 2: Status Updates & Design Notes
 Purpose: Enable periodic status pings and design docs for alignment.
@@ -168,6 +169,7 @@ Acceptance Criteria:
 ## 5. Decision Log (ADR-lite Index)
 | ID | Title | Date | Status | Summary |
 |----|-------|------|--------|---------|
+| ADR-0001 | Repository abstraction | 2025-09-20 | Accepted | Introduce interfaces enabling future persistence swap |
 | ADR-1 | (reserved: persistence choice) | (pending) | Draft | Will document SQLite rationale |
 
 ## 6. Operational Rituals
@@ -188,16 +190,15 @@ Acceptance Criteria:
 | Over-automation early | Waste | Medium | Manual first policy |
 
 ## 8. Logical Next Steps (Auto-Refresh Section)
-Timestamp: 2025-09-20T22:40:00Z
+Timestamp: 2025-09-20T22:48:00Z
 | Priority | Action | Rationale | Owner |
 |----------|--------|-----------|-------|
-| High | Implement task & bug repositories (P1-2/P1-3) | Decouple persistence early | Dev |
-| High | Refactor handlers to use repositories (P1-4) | Prevent Map coupling proliferation | Dev |
-| High | Complete error schema coverage (P1-10) | Contract clarity for clients | Architect |
-| High | Add negative tests (P1-12) | Validate failure & concurrency logic | QA |
-| Medium | Audit pagination + pruning policy (P1-11) | Control memory & improve query | Dev |
-| Medium | README envelope docs (P1-13) | Developer onboarding clarity | PM |
-| Low | OpenAPI publish script (P1-7) | Automate spec distribution | DevOps |
+| High | Implement audit pruning strategy (P1-11) | Prevent unbounded memory growth | Dev |
+| High | OpenAPI publish script (P1-7) | Automated spec distribution | DevOps |
+| High | Plan StatusUpdate & DesignNote schema (P2-1 prep) | Unblock Phase 2 early | Architect |
+| Medium | Add version conflict test for bugs (future) | Parity with tasks | QA |
+| Medium | Metrics instrumentation design (pre P4-1) | Smooth future observability | Architect |
+| Low | Persistence choice ADR draft (ADR-1) | Capture trade-offs early | Architect |
 | Low | Dependency scan script enhancement | Expand security posture | Security |
 
 Refresh Instructions: When any above action completes, update its source table, remove or demote it here, add newly emergent actions, and reset the timestamp to current ISO.

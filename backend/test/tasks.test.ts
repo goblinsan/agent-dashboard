@@ -58,4 +58,69 @@ describe('Task lifecycle', () => {
     expect(invalid.body.success).toBe(false);
     expect(invalid.body.error.code).toBe('invalid_transition');
   });
+
+  it('rejects version conflict', async () => {
+    const create = await request(app)
+      .post('/tasks')
+      .set('x-api-key', apiKey)
+      .send({ title: 'Version Task' })
+      .expect(201);
+    const taskId = create.body.data.id;
+    // Move to in_progress with expectedVersion 1
+    await request(app)
+      .post(`/tasks/${taskId}/transition`)
+      .set('x-api-key', apiKey)
+      .send({ newStatus: 'in_progress', rationale: 'Start', expectedVersion: 1 })
+      .expect(200);
+    // Attempt done with stale expectedVersion 2 (should be 2 now before increment, we send 1 to force conflict)
+    const conflict = await request(app)
+      .post(`/tasks/${taskId}/transition`)
+      .set('x-api-key', apiKey)
+      .send({ newStatus: 'done', rationale: 'Finish', expectedVersion: 1 })
+      .expect(409);
+    expect(conflict.body.success).toBe(false);
+    expect(conflict.body.error.code).toBe('version_conflict');
+  });
+
+  it('rejects blocked transition from done', async () => {
+    const create = await request(app)
+      .post('/tasks')
+      .set('x-api-key', apiKey)
+      .send({ title: 'Blocked Flow Task' })
+      .expect(201);
+    const taskId = create.body.data.id;
+    await request(app)
+      .post(`/tasks/${taskId}/transition`)
+      .set('x-api-key', apiKey)
+      .send({ newStatus: 'in_progress', rationale: 'Start', expectedVersion: 1 })
+      .expect(200);
+    await request(app)
+      .post(`/tasks/${taskId}/transition`)
+      .set('x-api-key', apiKey)
+      .send({ newStatus: 'done', rationale: 'Finish', expectedVersion: 2 })
+      .expect(200);
+    const invalid = await request(app)
+      .post(`/tasks/${taskId}/transition`)
+      .set('x-api-key', apiKey)
+      .send({ newStatus: 'blocked', rationale: 'Too late', expectedVersion: 3 })
+      .expect(400);
+    expect(invalid.body.success).toBe(false);
+    expect(invalid.body.error.code).toBe('invalid_transition');
+  });
+
+  it('rejects validation failure (short rationale)', async () => {
+    const create = await request(app)
+      .post('/tasks')
+      .set('x-api-key', apiKey)
+      .send({ title: 'Validation Task' })
+      .expect(201);
+    const taskId = create.body.data.id;
+    const invalid = await request(app)
+      .post(`/tasks/${taskId}/transition`)
+      .set('x-api-key', apiKey)
+      .send({ newStatus: 'in_progress', rationale: 'x', expectedVersion: 1 })
+      .expect(400);
+    expect(invalid.body.success).toBe(false);
+    expect(invalid.body.error.code).toBe('validation_failed');
+  });
 });
