@@ -1,6 +1,6 @@
 # Project Plan: AI Agent Dashboard
 
-Last Updated: 2025-09-21T18:45:30Z
+Last Updated: 2025-09-21T19:10:30Z
 Auto-Refresh Directive: After any task moves to Done, the responsible agent MUST (a) update status fields, (b) add emergent follow-up tasks, (c) prune obsolete tasks, and (d) refresh the Logical Next Steps section timestamp.
 
 ## 1. Vision & High-Level Goal
@@ -101,7 +101,7 @@ Single authoritative backlog. "Priority" uses P0 (near-term), P1 (important), P2
 | B-31 | In-phase task prioritization | Add `phasePriority` (int) with reorder API; adjust list sorting | P1 | 10 | Done (basic move & ordered listing implemented) |
 | B-32 | Project extended metadata | Fields: highLevelDescription, prioritizationRubric (md/text), securityGuidelines (md), devOps (repoUrl, ciUrl, slackChannel) | P0 | 10 | Todo |
 | B-33 | Nested project support | Add `parentProjectId` + depth validation + roll-up rules | P1 | 10 | Done (in-memory; cycle detection app-layer) |
-| B-34 | Completion roll-up engine | Compute % complete from leaf tasks via phases → projects; cache & invalidate on mutation | P0 | 10 | Partial (aggregation implemented, caching deferred) |
+| B-34 | Completion roll-up engine | Compute % complete from leaf tasks via phases → projects; cache & invalidate on mutation | P0 | 10 | Partial (aggregation + aggregated caching implemented; multi-level recursion & perf optimizations deferred) |
 | B-35 | Project status readout API | Endpoint `/projects/:id/status` returning activePhase, completionPct, activeTaskCount, nextPriorityTask | P0 | 10 | Done (extended with optional rollup=1) |
 | B-36 | Status readout UI panel | Surface aggregated status in dashboard; auto-refresh | P1 | 10 | Todo |
 | B-37 | Phase management UI | Create/reorder/archive phases; drag & drop reorder (progressive enhancement) | P1 | 10 | Todo |
@@ -168,17 +168,16 @@ Subsequent sections retain prior numbering intent but have been shifted.
 | Over-automation early | Waste | Medium | Manual first policy |
 
 ## 8. Logical Next Steps (Auto-Refresh Section)
-Timestamp: 2025-09-21T16:05:00Z
+Timestamp: 2025-09-21T19:10:30Z
 | Priority | Action | Rationale | Owner |
 |----------|--------|-----------|-------|
-| High | Phase & hierarchy schema design (B-27/B-32/B-33) | Unblock hierarchical tracking implementation | Architect |
-| High | Migration draft for phases & backfill (B-28/B-43) | Ensure data continuity & seamless rollout | Dev |
-| High | Roll-up algorithm spec (B-34/B-41) | Define deterministic completion math before coding | Dev |
-| Medium | Project status readout contract (B-35) | Align UI & API early | PM |
-| Medium | Extended project metadata fields format decision (markdown vs plain) | Consistency & rendering concerns | Architect |
-| Medium | Metrics design doc (B-1/B-2 dependency) | Prepare observability phase synergy with status readout | Dev |
-| Low | Cursor pagination evaluation (B-8) | Scale readiness | Dev |
-| Low | Vulnerability severity enforcement (B-3) | Strengthen security gate | Security |
+| High | Phase migration backfill & NOT NULL enforcement (B-28/B-43) | Complete transition; ensure every task assigned a phase | Dev |
+| High | Recursive roll-up & extended tests (B-34 extension, B-41) | Support deeper hierarchies prior to UI surfacing | Dev |
+| High | Metrics instrumentation (B-1) | Observe cache behavior & baseline performance | Dev |
+| Medium | Metadata schema & edit API (B-32/B-39) | Enable richer project context for agents | Architect |
+| Medium | Export/import hierarchy & phases spec (B-40) | Preserve structure across snapshots | PM |
+| Low | Incremental roll-up optimization research (B-44) | Plan scale path >5k tasks | Dev |
+| Low | Archived phase behavior policy (B-45) | Clarify semantics before UI integration | PM |
 
 Refresh Instructions: When any above action completes, update its source table, remove or demote it here, add newly emergent actions, and reset the timestamp to current ISO.
 
@@ -302,7 +301,7 @@ Planned (not yet implemented):
 	 ```
 
 ### 12.5 Roll-up Algorithm (Current Implementation & Draft Enhancements)
-Inputs: All non-deleted tasks belonging to non-archived phases of target project or its descendant projects (recursive).
+Inputs: All non-deleted tasks belonging to non-archived phases of target project and its immediate child projects (one-level aggregation; deeper recursion deferred).
 Computation:
 1. Collect leaf tasks set T.
 2. Let C = count(tasks in T with status == done).
@@ -313,15 +312,27 @@ Current Behavior: Aggregated status sums parent + immediate children only (one-l
 
 Planned Enhancements:
 - Recursive descent beyond one level (depth >1).
-- Caching layer with explicit invalidation on task/phase/project mutations.
-- Configurable inclusion of archived phases (flag).
+- Incremental recompute (dirty segment invalidation) instead of full aggregation.
+- Configurable inclusion toggle for archived phases.
 
-### 12.6 Caching & Invalidation (Deferred)
-Cache per project: { completionPct, counts, timestamp, version }. Invalidate on:
-1. Task create/update/delete/restore/status change.
-2. Phase archive/restore/reorder.
-3. Project nesting change.
-Status: Not yet implemented. Full recompute performed per request (acceptable at current scale). Strategy remains: LRU + event invalidation; revisit after baseline perf metrics (B-44).
+### 12.6 Caching & Invalidation (Implemented – Aggregated Only)
+Current Scope:
+- Only aggregated (roll-up) status snapshots are cached; base project status recomputed each request for immediate consistency.
+- In-memory Map keyed by projectId storing { snapshot, cachedAt } with 10s TTL.
+
+Invalidation Triggers (bubble up ancestry):
+1. Task create / status transition / move / soft delete / restore.
+2. Phase create / archive / restore / reorder.
+3. Project parent change (set/clear).
+4. Related record mutations (bugs, status updates, design notes) trigger conservative invalidation.
+
+Rationale: Aggregated computations span multiple projects; caching reduces redundant recomputes for polling agents. Base snapshots are cheap; caching them caused stale reads in repo-level test mutations.
+
+Deferred Enhancements:
+- Multi-level recursive aggregation + caching.
+- Incremental delta-based invalidation (track affected counts) (B-44).
+- Metrics for hit rate & recompute latency (depends on B-1/B-2).
+- Optional diagnostics endpoint exposing cache stats.
 
 ### 12.7 Migration Strategy
 1. Add `phases` table & `phaseId` to `tasks` (nullable initial).
