@@ -1,8 +1,11 @@
 openapi: 3.0.3
 info:
   title: AI Agent Dashboard API
-  version: 0.3.2
-  description: API for coordinating agents (Phase 2 bug patch + pagination)
+  version: 0.4.0
+  description: >
+    API for coordinating agents.
+    Includes Phase 2 enhancements (bug patch + pagination) and Phase 3/4 features: soft delete + restore endpoints,
+    soft-delete aware listing (includeDeleted=1), and status update creation.
 servers:
   - url: http://localhost:4000
 paths:
@@ -63,6 +66,11 @@ paths:
           schema:
             type: string
             enum: [todo, in_progress, blocked, done]
+        - in: query
+          name: includeDeleted
+          schema: { type: string, enum: ['1'] }
+          required: false
+          description: If set to 1, include soft-deleted tasks in the result
       security:
         - ApiKeyAuth: []
       responses:
@@ -160,11 +168,69 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
+  /tasks/{id}:
+    delete:
+      summary: Soft delete task
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Soft delete result
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessSoftDelete' }
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+  /tasks/{id}/restore:
+    post:
+      summary: Restore soft-deleted task
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Restore result
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessRestore' }
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
   /bugs:
     get:
       summary: List bugs
       security:
         - ApiKeyAuth: []
+      parameters:
+        - in: query
+          name: includeDeleted
+          schema: { type: string, enum: ['1'] }
+          required: false
+          description: If set to 1, include soft-deleted bugs
       responses:
         '200':
           description: Bug list
@@ -270,6 +336,57 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
+    delete:
+      summary: Soft delete bug
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Soft delete result
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessSoftDelete' }
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+  /bugs/{id}/restore:
+    post:
+      summary: Restore soft-deleted bug
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Restore result
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessRestore' }
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
   /audit:
     get:
       summary: Recent audit entries
@@ -339,6 +456,41 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
+    post:
+      summary: Create status update
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [message]
+              properties:
+                message: { type: string, minLength: 3, maxLength: 500 }
+                taskId: { type: string }
+      responses:
+        '201':
+          description: Created status update
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessStatusUpdate' }
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '500':
+          description: Internal error
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
   /design-notes:
     get:
       summary: List recent design notes
@@ -353,6 +505,10 @@ paths:
           name: offset
           schema: { type: integer, minimum: 0, default: 0 }
           description: Offset from newest (pagination)
+        - in: query
+          name: includeDeleted
+          schema: { type: string, enum: ['1'] }
+          description: If set to 1, include soft-deleted design notes
       responses:
         '200':
           description: Design notes list
@@ -406,38 +562,55 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
-    post:
-      summary: Create status update
+  /design-notes/{id}:
+    delete:
+      summary: Soft delete design note
       security:
         - ApiKeyAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [message]
-              properties:
-                message: { type: string, minLength: 3, maxLength: 500 }
-                taskId: { type: string }
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
       responses:
-        '201':
-          description: Created status update
+        '200':
+          description: Soft delete result
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/SuccessStatusUpdate' }
-        '400':
-          description: Validation error
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/ErrorResponse' }
+              schema: { $ref: '#/components/schemas/SuccessSoftDelete' }
         '401':
           description: Unauthorized
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
-        '500':
-          description: Internal error
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+  /design-notes/{id}/restore:
+    post:
+      summary: Restore soft-deleted design note
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Restore result
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessRestore' }
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '404':
+          description: Not found
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
@@ -484,6 +657,7 @@ components:
         rationaleLog:
           type: array
           items: { type: string }
+        deletedAt: { type: integer, nullable: true, description: Epoch ms when soft-deleted; null/omitted if active }
     BugReport:
       type: object
       properties:
@@ -497,6 +671,7 @@ components:
         proposedFix: { type: string }
         createdAt: { type: integer }
         version: { type: integer, description: Incremented on each successful update }
+        deletedAt: { type: integer, nullable: true, description: Epoch ms when soft-deleted; null/omitted if active }
     AuditEntry:
       type: object
       properties:
@@ -526,6 +701,7 @@ components:
         createdAt: { type: integer }
         supersededBy: { type: string }
         actor: { type: string }
+        deletedAt: { type: integer, nullable: true, description: Epoch ms when soft-deleted; null/omitted if active }
     SuccessHealthz:
       allOf:
         - $ref: '#/components/schemas/SuccessEnvelope'
@@ -623,3 +799,27 @@ components:
             data:
               type: array
               items: { $ref: '#/components/schemas/DesignNote' }
+    SoftDeleteResult:
+      type: object
+      properties:
+        deleted: { type: boolean }
+        alreadyDeleted: { type: boolean }
+    RestoreResult:
+      type: object
+      properties:
+        restored: { type: boolean }
+        alreadyActive: { type: boolean }
+    SuccessSoftDelete:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/SoftDeleteResult'
+    SuccessRestore:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/RestoreResult'

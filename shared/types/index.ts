@@ -25,6 +25,7 @@ export interface Task {
   version: number; // optimistic concurrency control
   rationaleLog: string[]; // decision/rationale snapshots
   linkedBugIds?: string[];
+  deletedAt?: number; // epoch ms when soft-deleted (undefined => active)
 }
 
 export type BugSeverity = 'low' | 'medium' | 'high' | 'critical';
@@ -43,6 +44,8 @@ export interface BugReport {
   reporter?: string;
   createdAt: number;
   updatedAt: number;
+  version?: number; // optimistic concurrency (added Phase 2 enhancement)
+  deletedAt?: number; // epoch ms when soft-deleted
 }
 
 export interface Guideline {
@@ -78,20 +81,21 @@ export interface BugCreateRequest {
 export interface StatusUpdate {
   id: string;
   actor: string; // agent or user id
-  taskId?: string; // optional linking
-  message: string;
-  createdAt: number;
+  taskId?: string; // optional linking (undefined => global/project scope)
+  message: string; // concise update text (<= 500 chars recommended)
+  createdAt: number; // epoch ms
 }
 
 // ADR-lite / design note
 export interface DesignNote {
   id: string;
   title: string;
-  context: string;
-  decision: string;
-  consequences: string;
+  context: string; // problem framing / intent
+  decision: string; // chosen approach summary
+  consequences: string; // trade-offs / follow-ups
   createdAt: number;
-  supersededBy?: string;
+  supersededBy?: string; // forward link if replaced
+  deletedAt?: number; // epoch ms when soft-deleted
 }
 
 // Audit log entry for all mutations

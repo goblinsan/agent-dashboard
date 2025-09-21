@@ -1,6 +1,6 @@
 {
   "name": "ai-agent-dashboard-backend",
-  "version": "0.1.0",
+  "version": "0.4.0",
   "type": "module",
   "main": "dist/server.js",
   "scripts": {
@@ -16,7 +16,9 @@
     "migrate": "node scripts/migrate.cjs",
     "migrate:if-present": "node scripts/migrate-if-present.cjs",
     "dev:sqlite": "cross-env PERSISTENCE=sqlite npm run migrate && cross-env PERSISTENCE=sqlite npm run dev",
-    "ci:verify": "npm run build && npm run test && npm run lint:openapi && npm run openapi:publish && npm run scan:json && npm run migrate:if-present"
+    "ci:verify": "npm run build && npm run test && npm run lint:openapi && npm run openapi:publish && npm run scan:json && npm run migrate:if-present",
+    "data:export": "node scripts/export-data.cjs",
+    "data:import": "node scripts/import-data.cjs"
   },
   "dependencies": {
     "cors": "^2.8.5",

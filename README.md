@@ -18,6 +18,48 @@ npm run dev   # (if a dev script is later added) or: npx ts-node src/server.ts
 
 Server defaults to `http://localhost:4000`.
 
+## Minimal Dashboard (MVP UI)
+After starting the backend you can access a lightweight dashboard at the root URL (`/`). It provides:
+- API key input (persisted in `localStorage`).
+- Auto-refresh (every ~7s) lists for Tasks, Bugs, and recent Status Updates.
+- Inline create-task form (title + optional priority) with immediate refresh.
+- Inline status update submission form (posts global updates).
+
+Soft-deleted records are excluded (there is currently no UI toggle to show or restore them; use API calls below). A future enhancement may add a "Show Deleted" toggle + restore buttons.
+
+### Quick UI Tour
+1. Register an agent (get API key):
+	 ```bash
+	 curl -s -X POST http://localhost:4000/agents/register \
+		 -H 'Content-Type: application/json' \
+		 -d '{"name":"ui-user","role":"dev"}' | jq
+	 ```
+2. Open `http://localhost:4000/` in a browser.
+3. Paste the `apiKey` into the field; click Save.
+4. Create a task via the form (e.g. "Draft MVP criteria"). It will appear in the Tasks list.
+5. Use API calls (or future UI forms) to post status updates; they appear in the Status Updates panel.
+
+Error states (missing/invalid key) appear as a red banner. Soft-deleted entities are intentionally excluded from the dashboard lists (restored items reappear automatically).
+
+### Posting a Status Update (via API)
+```bash
+curl -s -X POST http://localhost:4000/status-updates \
+	-H "x-api-key: $API_KEY" -H 'Content-Type: application/json' \
+	-d '{"message":"Dashboard smoke OK"}' | jq
+```
+
+### Soft Delete / Restore (UI Visibility)
+Currently deletion & restoration are API-only. Example:
+```bash
+TASK_ID=... # existing task id
+curl -X DELETE -H "x-api-key: $API_KEY" http://localhost:4000/tasks/$TASK_ID
+curl -H "x-api-key: $API_KEY" http://localhost:4000/tasks | jq   # task gone
+curl -X POST -H "x-api-key: $API_KEY" http://localhost:4000/tasks/$TASK_ID/restore
+curl -H "x-api-key: $API_KEY" http://localhost:4000/tasks | jq   # task visible again
+```
+
+Planned incremental UI enhancements (post-MVP): toggle to show deleted items + restore buttons, design notes list, WebSocket-driven live updates.
+
 ### Health Endpoints
 All responses follow the standard envelope: `{ success: true, data: ... }` or `{ success: false, error: { code, message, details? } }`.
 
@@ -82,7 +124,7 @@ Error example (invalid transition):
 See `shared/types/index.ts` for `Task`, `BugReport`, `StatusUpdate`, `DesignNote`, and `AuditEntry` definitions.
 
 ## API Specification
-An evolving OpenAPI spec lives at `backend/openapi.yaml` (current: 0.3.2). Keep this file updated with any new endpoints or schema changes before merging functional changes.
+An evolving OpenAPI spec lives at `backend/openapi.yaml` (current: 0.4.0). Keep this file updated with any new endpoints or schema changes before merging functional changes.
 
 Status enum has been migrated to: `todo | in_progress | blocked | done` (legacy `open/completed` still accepted only via query normalization temporarily).
 
@@ -175,6 +217,92 @@ Fields:
 - `offset` (default 0) counts how many newest items to skip
 - `since` (status updates only) filters by creation time before pagination windowing
 
+### Data Export / Import
+Portable JSON snapshots let you backup or migrate between in-memory and SQLite modes.
+
+Export (writes to stdout):
+```bash
+cd backend
+npm run data:export > snapshot.json
+```
+Or specify a file path:
+```bash
+npm run data:export -- --file ./data/export-$(date +%s).json
+```
+
+Import (CAUTION: naive insert-only; best on empty datasets):
+```bash
+npm run data:import -- snapshot.json
+```
+The import script will create entities using current repository implementation. IDs and versions may differ from original; reconciliation/upsert not yet implemented.
+
+### Role-Based Authorization (Experimental)
+Role enforcement is disabled by default. Set `ENFORCE_ROLES=1` to enable rudimentary role checks.
+
+Current behavior when enabled:
+- `POST /design-notes` requires agent role in: `architect | pm`.
+
+All other endpoints are currently unrestricted (authentication via `x-api-key` still required). Agents obtain a role at registration time: `POST /agents/register { name, role }`.
+
+Example (Windows bash / cross-env pattern if needed):
+```bash
+ENFORCE_ROLES=1 npm run dev
+# or
+cross-env ENFORCE_ROLES=1 npm run dev
+```
+If an agent without required role attempts a protected action, response:
+```json
+{ "success": false, "error": { "code": "forbidden", "message": "forbidden" } }
+```
+
+### Soft Delete & Restore (Experimental)
+Entities (`tasks`, `bugs`, `design-notes`) support soft deletion and restoration via endpoints:
+
+```bash
+DELETE /tasks/:id              # soft delete
+POST   /tasks/:id/restore      # restore previously deleted
+DELETE /bugs/:id
+POST   /bugs/:id/restore
+DELETE /design-notes/:id
+POST   /design-notes/:id/restore
+```
+
+Behavior:
+- Delete marks the entity with `deletedAt` (not permanently removed).
+- Restore clears `deletedAt` making it visible again in default listings.
+- Default list endpoints exclude soft-deleted records.
+- Use `?includeDeleted=1` query parameter on list endpoints (`/tasks`, `/bugs`, `/design-notes`) to include them.
+- A second delete call on an already deleted entity returns `{ alreadyDeleted: true }`.
+- A restore call on an already active (not deleted) entity returns `{ alreadyActive: true }`.
+- Audit log records `soft_deleted` and `restored` actions.
+
+List with deleted included:
+```bash
+curl -H "x-api-key: $API_KEY" "http://localhost:4000/tasks?includeDeleted=1" | jq
+```
+You can then call restore on selected ids.
+
+Example (Task lifecycle):
+```bash
+# Delete a task
+afterId=T-123
+curl -X DELETE -H "x-api-key: $API_KEY" http://localhost:4000/tasks/$afterId
+
+# Fetch including deleted
+curl -H "x-api-key: $API_KEY" "http://localhost:4000/tasks?includeDeleted=1" | jq
+
+# Restore the task
+curl -X POST -H "x-api-key: $API_KEY" http://localhost:4000/tasks/$afterId/restore
+
+# Now visible without includeDeleted
+curl -H "x-api-key: $API_KEY" http://localhost:4000/tasks | jq
+```
+
+Limitations / Roadmap:
+- No bulk restore/undelete endpoint yet.
+- Physical purge may follow later (cron / retention window) to hard-delete aged soft-deleted entities.
+- Import/export currently treats deleted items as normal objects; future tooling may optionally exclude or differentiate them.
+
 ### Contributing Workflow (Condensed)
 1. Select a Todo task from plan; move to In-Progress.
 2. Implement minimal change + tests (when harness present).
@@ -182,13 +310,14 @@ Fields:
 4. Commit with conventional style (e.g., `feat:`, `chore:`).
 
 ## Roadmap Snapshot
-| Phase | Focus |
-|-------|-------|
+| Phase | Focus (Summary) |
+|-------|-----------------|
 | 0 | Foundations (docs, types, health) |
 | 1 | Task & Bug CRUD API |
 | 2 | Status Updates & Design Notes |
-| 3 | Persistence & Role Guardrails |
-| 4 | Observability & Automation |
+| 3 | Persistence, Authorization & Archival (completed) |
+| 4 | Minimal Dashboard UI (in progress) |
+| 5 | Observability & Automation (upcoming) |
 
 Full details in `PROJECT_PLAN.md`.
 
@@ -259,12 +388,15 @@ Migrations live in `backend/migrations/*.sql` and are applied by:
 Applied migrations are recorded in the `_migrations` table.
 
 ### Current Coverage
-Implemented repositories (SQLite): Tasks, Bugs (StatusUpdates & DesignNotes still in-memory until finalized schema adaptation).
+Implemented repositories (SQLite): Tasks, Bugs, StatusUpdates, DesignNotes.
 
 ### Roadmap
-- Add SQLite status updates & design notes repos
+- Role-based authorization middleware
+- Soft delete (archival flag) for core entities
 - Optional: Persist audit log
-- Export/import JSON utility for portability
+- Upsert-aware import (id & version preservation)
+- CI matrix job exercising SQLite path
+- Cursor pagination evaluation
 
 ## License
 TBD (add license file if open sourcing publicly).
