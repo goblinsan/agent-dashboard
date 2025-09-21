@@ -55,11 +55,12 @@ if (useSqlite) {
 }
 const guidelines = new Map<string, Guideline>();
 const auditLog: { id: string; actor: string; entity: string; entityId: string; action: string; at: number; diff?: any }[] = [];
-const MAX_AUDIT_ENTRIES = parseInt(process.env.MAX_AUDIT_ENTRIES || '5000', 10);
+function maxAuditEntries() { return parseInt(process.env.MAX_AUDIT_ENTRIES || '5000', 10); }
 function pushAudit(entry: { id: string; actor: string; entity: string; entityId: string; action: string; at: number; diff?: any }) {
   auditLog.push(entry);
-  if (auditLog.length > MAX_AUDIT_ENTRIES) {
-    const overflow = auditLog.length - MAX_AUDIT_ENTRIES;
+  const cap = maxAuditEntries();
+  if (auditLog.length > cap) {
+    const overflow = auditLog.length - cap;
     auditLog.splice(0, overflow);
   }
 }
@@ -298,22 +299,34 @@ app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
   return fail(res, new ApiError('internal_error', 500));
 });
 
-// WebSocket events
-const serverPort = process.env.PORT || 4000;
-const server = app.listen(serverPort, () => {
-  console.log(`Backend listening on :${serverPort}`);
-});
-
+// WebSocket + HTTP bootstrap (defer actual listen so tests can instantiate multiple isolated apps)
 interface OutboundEvent { type: string; [k: string]: any }
-const wss = new WebSocketServer({ server, path: '/events' });
+let server: any;
+let wss: WebSocketServer | null = null;
+
+function ensureServer() {
+  if (server) return server;
+  const serverPort = process.env.PORT || 4000;
+  server = app.listen(serverPort, () => {
+    if (!process.env.VITEST) console.log(`Backend listening on :${serverPort}`);
+  });
+  wss = new WebSocketServer({ server, path: '/events' });
+  wss.on('connection', (ws: WebSocket) => {
+    ws.send(JSON.stringify({ type: 'hello', ts: Date.now() }));
+  });
+  return server;
+}
 
 function broadcast(event: OutboundEvent) {
+  if (!wss) return; // no-op if server not started
   const payload = JSON.stringify(event);
   wss.clients.forEach((c: WebSocket) => { if (c.readyState === WebSocket.OPEN) c.send(payload); });
 }
 
-wss.on('connection', (ws: WebSocket) => {
-  ws.send(JSON.stringify({ type: 'hello', ts: Date.now() }));
-});
+export function startServer() { return ensureServer(); }
+export function stopServer() { if (wss) { wss.clients.forEach(c => c.close()); wss.close(); wss = null; } if (server) { server.close(); server = null; } }
+
+// Auto-start only when not under Vitest (so existing runtime behavior unchanged)
+if (!process.env.VITEST) ensureServer();
 
 export { app, agents, taskRepo, bugRepo, guidelines, auditLog, statusUpdateRepo, designNoteRepo };
