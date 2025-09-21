@@ -187,6 +187,24 @@ Future Enhancements:
 * Optional cross-project aggregate endpoints (e.g., global metrics) with explicit opt-in.
 * Project-level role scoping / permissions.
 
+### Browser Dashboard Enhancements (Post v0.5.0)
+The static dashboard (`backend/public/index.html`) now includes:
+* Auto agent registration: if no API key is stored, a lightweight agent is registered (`web-<random>`), and the returned key is saved.
+* Project management panel: list, create, select, archive, and restore projects directly in the browser.
+* Per-project context: all task / bug / status update operations send `x-project-id` for the selected project (defaults to `default`).
+* Visual active project indicator and immediate refresh upon switching.
+
+Limitations:
+* No delete (hard removal) of projects—only archive/restore.
+* Design notes & bug creation UI still omitted (API only for now).
+* Role-based restrictions not surfaced visually (errors still appear in banner).
+
+Planned UI follow-ups:
+* Design note creation and listing pane.
+* Bug report creation form and transitions.
+* WebSocket-driven live updates (currently polling every 7s).
+* Inline project description editing.
+
 ### OpenAPI Linting
 Run Spectral against the spec to catch contract issues:
 ```bash
