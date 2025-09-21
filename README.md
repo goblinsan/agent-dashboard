@@ -47,6 +47,11 @@ curl -s -H "x-api-key: $API_KEY" http://localhost:4000/healthz | jq
 ## Domain Types (Early Draft)
 See `shared/types/index.ts` for `Task`, `BugReport`, `StatusUpdate`, `DesignNote`, and `AuditEntry` definitions.
 
+## API Specification
+An evolving OpenAPI spec lives at `backend/openapi.yaml`. Keep this file updated with any new endpoints or schema changes before merging functional changes.
+
+Status enum has been migrated to: `todo | in_progress | blocked | done` (legacy `open/completed` still accepted only via query normalization temporarily).
+
 ## Contributing Workflow (Condensed)
 1. Select a Todo task from plan; move to In-Progress.
 2. Implement minimal change + tests (when harness present).

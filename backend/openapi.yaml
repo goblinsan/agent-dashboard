@@ -1,0 +1,213 @@
+openapi: 3.0.3
+info:
+  title: AI Agent Dashboard API
+  version: 0.1.0
+  description: Minimal API for coordinating agents (Phase 0/1 draft)
+servers:
+  - url: http://localhost:4000
+paths:
+  /healthz:
+    get:
+      summary: Health & uptime
+      responses:
+        '200':
+          description: Health payload
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string }
+                  version: { type: string }
+                  uptimeMs: { type: number }
+                  counts:
+                    type: object
+                    properties:
+                      tasks: { type: integer }
+                      agents: { type: integer }
+                      bugs: { type: integer }
+                  timestamp: { type: number }
+  /agents/register:
+    post:
+      summary: Register a new agent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                role: { type: string }
+      responses:
+        '200':
+          description: Registration success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string }
+                  apiKey: { type: string }
+  /tasks:
+    get:
+      summary: List tasks
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [todo, in_progress, blocked, done]
+      security:
+        - ApiKeyAuth: []
+      responses:
+        '200':
+          description: Task list
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Task' }
+    post:
+      summary: Create task
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title]
+              properties:
+                title: { type: string }
+                priority: { type: string, enum: [low, medium, high, critical] }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Task' }
+  /tasks/{id}/transition:
+    post:
+      summary: Transition task status
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [newStatus, rationale, expectedVersion]
+              properties:
+                newStatus: { type: string, enum: [in_progress, blocked, done] }
+                rationale: { type: string }
+                confidence: { type: number, minimum: 0, maximum: 1 }
+                expectedVersion: { type: integer }
+      responses:
+        '200':
+          description: Updated task
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Task' }
+  /bugs:
+    get:
+      summary: List bugs
+      security:
+        - ApiKeyAuth: []
+      responses:
+        '200':
+          description: Bug list
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/BugReport' }
+    post:
+      summary: Create bug report
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title, severity, reproSteps]
+              properties:
+                title: { type: string }
+                severity: { type: string, enum: [low, medium, high, critical] }
+                taskId: { type: string }
+                reproSteps:
+                  type: array
+                  items: { type: string }
+                proposedFix: { type: string }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BugReport' }
+  /audit:
+    get:
+      summary: Recent audit entries
+      security:
+        - ApiKeyAuth: []
+      responses:
+        '200':
+          description: Audit log slice
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/AuditEntry' }
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key
+  schemas:
+    Task:
+      type: object
+      properties:
+        id: { type: string }
+        title: { type: string }
+        status: { type: string, enum: [todo, in_progress, blocked, done] }
+        version: { type: integer }
+        assignees:
+          type: array
+          items: { type: string }
+        priority: { type: string, enum: [low, medium, high, critical] }
+        rationaleLog:
+          type: array
+          items: { type: string }
+    BugReport:
+      type: object
+      properties:
+        id: { type: string }
+        title: { type: string }
+        severity: { type: string, enum: [low, medium, high, critical] }
+        taskId: { type: string }
+        reproSteps:
+          type: array
+          items: { type: string }
+        proposedFix: { type: string }
+        createdAt: { type: integer }
+    AuditEntry:
+      type: object
+      properties:
+        id: { type: string }
+        actor: { type: string }
+        entity: { type: string }
+        entityId: { type: string }
+        action: { type: string }
+        at: { type: integer }
+        diff: { type: object }

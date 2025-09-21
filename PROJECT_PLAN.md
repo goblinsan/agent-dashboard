@@ -1,6 +1,6 @@
 # Project Plan: AI Agent Dashboard
 
-Last Updated: 2025-09-20T00:00:00Z
+Last Updated: 2025-09-20T12:00:00Z
 Auto-Refresh Directive: After any task moves to Done, the responsible agent MUST (a) update status fields, (b) add emergent follow-up tasks, (c) prune obsolete tasks, and (d) refresh the Logical Next Steps section timestamp.
 
 ## 1. Vision & High-Level Goal
@@ -56,11 +56,14 @@ Acceptance Criteria:
 | ID | Task | Owner | Status | Priority | ETA | Notes |
 |----|------|-------|--------|----------|-----|-------|
 | P0-1 | Expand project plan scaffold | PM | Done | High | 2025-09-20 | Initial commit |
-| P0-2 | Update prioritization rubric | PM | Todo | High | 2025-09-20 | MVP focus wording |
-| P0-3 | Flesh out personas | PM | In-Progress | High | 2025-09-20 | Architect through Security |
-| P0-4 | Define shared type interfaces | Architect | Todo | High | 2025-09-21 | Task, BugReport, StatusUpdate |
-| P0-5 | Backend health endpoint | Dev | Todo | Medium | 2025-09-21 | `/healthz` returns ok + version |
-| P0-6 | ADR template added | Architect | Todo | Low | 2025-09-21 | Lightweight structure |
+| P0-2 | Update prioritization rubric | PM | Done | High | 2025-09-20 | MVP focus wording applied |
+| P0-3 | Flesh out personas | PM | Done | High | 2025-09-20 | All personas expanded |
+| P0-4 | Define shared type interfaces | Architect | Done | High | 2025-09-20 | Implemented in shared/types |
+| P0-5 | Backend health endpoint | Dev | Done | Medium | 2025-09-20 | `/health` + `/healthz` added |
+| P0-6 | ADR template added | Architect | Done | Low | 2025-09-20 | `docs/adr/ADR-Template.md` |
+| P0-7 | README expansion | PM | Done | Medium | 2025-09-20 | Added quick start & references |
+| P0-8 | Status enum migration plan | Architect | Todo | Medium | 2025-09-21 | Align backend open/completed -> todo/done |
+| P0-9 | Introduce audit log scaffold | Dev | Todo | Medium | 2025-09-21 | Prepare for Phase 1 logging |
 
 ### Phase 1: MVP Task & Bug CRUD API
 Purpose: Provide minimal REST API for tasks and bug reports consumed by agents.
@@ -180,14 +183,15 @@ Acceptance Criteria:
 | Over-automation early | Waste | Medium | Manual first policy |
 
 ## 8. Logical Next Steps (Auto-Refresh Section)
-Timestamp: 2025-09-20T00:00:00Z
+Timestamp: 2025-09-20T12:00:00Z
 | Priority | Action | Rationale | Owner |
 |----------|--------|-----------|-------|
-| High | Complete prioritization rubric update (P0-2) | Needed to enforce MVP lens | PM |
-| High | Finalize personas (P0-3) | Enables role-based guidance for agents | PM |
-| High | Define shared type interfaces (P0-4) | Unblocks Phase 1 API spec | Architect |
-| Medium | Implement health endpoint (P0-5) | Basic runtime verification | Dev |
-| Low | Add ADR template (P0-6) | Supports architectural traceability | Architect |
+| High | Draft OpenAPI spec (P1-1) | Needed before wider client adoption | Architect |
+| High | Implement task repository & handlers (P1-2/P1-4) | Core CRUD path | Dev |
+| High | Implement bug repository (P1-3) | Complete MVP entity pair | Dev |
+| Medium | Add audit trail scaffold (P0-9 / P1-6) | Supports traceability early | Dev |
+| Medium | Migrate status enum (P0-8) | Consistency across backend & shared types | Architect |
+| Low | Add dependency scan script | Early security hygiene | Security |
 
 Refresh Instructions: When any above action completes, update its source table, remove or demote it here, add newly emergent actions, and reset the timestamp to current ISO.
 
