@@ -237,14 +237,41 @@ app.get('/tasks', auth, selectProject, (req: Request, res: Response) => {
 });
 
 app.post('/tasks', auth, selectProject, (req: Request, res: Response) => {
-  const { title, priority } = req.body || {};
+  const { title, priority, phaseId } = req.body || {};
   if (!title) return fail(res, new ApiError('title_required', 400));
   const projectId = (req as any).projectId;
-  const task = taskRepo.create({ title, priority, projectId });
+  // Determine phase assignment: if explicit phaseId provided and valid, use it; else ensure default phase and use it
+  let targetPhaseId = phaseId as string | undefined;
+  const repo = ensurePhaseRepo();
+  if (targetPhaseId) {
+    const ph = repo.getById(targetPhaseId);
+    if (!ph || ph.projectId !== projectId) return fail(res, new ApiError('validation_failed', 400, 'invalid_phase_for_project'));
+    if (ph.archivedAt) return fail(res, new ApiError('validation_failed', 400, 'phase_archived'));
+  } else {
+    // Acquire existing phases (non-archived). If none, create a default.
+    let phases = repo.list(projectId, false);
+    if (phases.length === 0 && repo.ensureDefaultPhase) {
+      const defaultId = 'phase_' + projectId;
+      repo.ensureDefaultPhase(projectId, defaultId);
+      phases = repo.list(projectId, false);
+    }
+    if (phases.length > 0) {
+      // Use first (orderIndex 0) as default
+      targetPhaseId = phases[0].id;
+    }
+  }
+  const task = taskRepo.create({ title, priority, projectId, phaseId: targetPhaseId });
+  // Assign phasePriority if we have a phase
+  if (targetPhaseId && taskRepo.setPhase && task.phaseId === targetPhaseId && (task as any).phasePriority === undefined) {
+    const all = taskRepo.list({ projectId });
+    const inPhase = all.filter((t: any) => t.phaseId === targetPhaseId && t.id !== task.id);
+    const max = inPhase.reduce((m: number, cur: any) => cur.phasePriority !== undefined && cur.phasePriority > m ? cur.phasePriority : m, -1);
+    taskRepo.setPhase(task.id, targetPhaseId, max + 1);
+  }
   const actor = (req as any).agent?.id || 'system';
-  pushAudit({ id: nanoid(10), actor, entity: 'task', entityId: task.id, action: 'created', at: Date.now(), diff: { status: { to: 'todo' } } });
+  pushAudit({ id: nanoid(10), actor, entity: 'task', entityId: task.id, action: 'created', at: Date.now(), diff: { status: { to: 'todo' }, phaseId: { to: targetPhaseId } } });
   broadcast({ type: 'task.created', task });
-  if ((task as any).projectId) invalidateProjectStatus((task as any).projectId);
+  if (projectId) invalidateProjectStatus(projectId);
   return ok(res, task, 201);
 });
 
@@ -414,6 +441,12 @@ app.post('/projects', auth, (req: Request, res: Response) => {
   if (parsed.data.parentProjectId) {
     try { projectRepo.setParent(proj.id, parsed.data.parentProjectId); (proj as any).parentProjectId = parsed.data.parentProjectId; }
     catch (e: any) { return fail(res, new ApiError('validation_failed', 400, e.message)); }
+  }
+  // Ensure a default phase exists for this project so new tasks can auto-attach.
+  const phRepo = ensurePhaseRepo();
+  if (phRepo.ensureDefaultPhase) {
+    const defaultId = 'phase_' + proj.id;
+    phRepo.ensureDefaultPhase(proj.id, defaultId);
   }
   pushAudit({ id: nanoid(10), actor: (req as any).agent.id, entity: 'project', entityId: proj.id, action: 'created', at: Date.now(), diff: { name: { to: proj.name } } });
   broadcast({ type: 'project.created', project: proj });
@@ -660,5 +693,41 @@ export function stopServer() { if (wss) { wss.clients.forEach(c => c.close()); w
 
 // Auto-start only when not under Vitest (so existing runtime behavior unchanged)
 if (!process.env.VITEST) ensureServer();
+
+// Backfill: assign any existing tasks lacking phaseId into a default phase per project (in-memory + sqlite parity)
+try {
+  const allTasks = taskRepo.list({ includeDeleted: true });
+  const phRepo = ensurePhaseRepo();
+  const byProject: Record<string, any[]> = {};
+  allTasks.forEach((t: any) => { if (!byProject[t.projectId]) byProject[t.projectId] = []; byProject[t.projectId].push(t); });
+  for (const projectId of Object.keys(byProject)) {
+    let phases = phRepo.list(projectId, true);
+    if (phases.length === 0 && phRepo.ensureDefaultPhase) {
+      phRepo.ensureDefaultPhase(projectId, 'phase_' + projectId);
+      phases = phRepo.list(projectId, true);
+    }
+    const defaultPhase = phases.find((p: any) => p.orderIndex === 0) || phases[0];
+    if (!defaultPhase) continue;
+    const tasksNeeding = byProject[projectId].filter(t => !t.phaseId);
+    if (tasksNeeding.length === 0) continue;
+    // Determine next phasePriority baseline in default phase
+    const existing = byProject[projectId].filter(t => t.phaseId === defaultPhase.id && t.phasePriority !== undefined);
+    let max = existing.reduce((m: number, cur: any) => cur.phasePriority > m ? cur.phasePriority : m, -1);
+    for (const task of tasksNeeding) {
+      if (taskRepo.setPhase) {
+        max += 1;
+        taskRepo.setPhase(task.id, defaultPhase.id, max);
+      } else {
+        (task as any).phaseId = defaultPhase.id;
+      }
+    }
+    if (tasksNeeding.length > 0) {
+      // Invalidate aggregated status for project due to structural change
+      invalidateProjectStatus(projectId);
+    }
+  }
+} catch (e) {
+  if (!process.env.VITEST) console.warn('[backfill] phase assignment skipped due to error:', (e as any)?.message);
+}
 
 export { app, agents, taskRepo, bugRepo, guidelines, auditLog, statusUpdateRepo, designNoteRepo, projectRepo, phaseRepo };

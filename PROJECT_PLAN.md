@@ -95,7 +95,7 @@ Single authoritative backlog. "Priority" uses P0 (near-term), P1 (important), P2
 | B-25 | Project selection UI | Dropdown + create project inline (persists selection in localStorage) | P1 | 6 | Done |
 | B-26 | Export/import multi-project aware | Include projects array & per-entity projectId in snapshot | P1 | 8 | Todo |
 | B-27 | Phase entity schema | Define Phase (id, projectId, name, description?, orderIndex, createdAt, archivedAt?) | P0 | 10 | Done |
-| B-28 | Phase migration & backfill | SQLite migration; create implicit default phase per existing project; update export/import | P0 | 10 | In-Progress (migration file added; enforcement step pending) |
+| B-28 | Phase migration & backfill | SQLite migration; create implicit default phase per existing project; update export/import | P0 | 10 | Partial (default phase auto-create + runtime backfill implemented; NOT NULL & export/import pending) |
 | B-29 | Phase CRUD & reorder API | Create/list/update/archive; reorder endpoint (batch orderIndex update) | P0 | 10 | Done |
 | B-30 | Task phase linkage | Add `phaseId` to tasks (nullable until backfilled); enforce phase-project consistency | P0 | 10 | Done |
 | B-31 | In-phase task prioritization | Add `phasePriority` (int) with reorder API; adjust list sorting | P1 | 10 | Done (basic move & ordered listing implemented) |
@@ -110,7 +110,7 @@ Single authoritative backlog. "Priority" uses P0 (near-term), P1 (important), P2
 | B-40 | Hierarchical export/import | Extend snapshot format with phases, parentProjectId, phase/task ordering | P1 | 10 | Todo |
 | B-41 | Roll-up test suite | Unit tests for completion math across nested projects & phase/task edge cases | P0 | 10 | Todo |
 | B-42 | Data validation guards | Ensure phase.projectId matches task.projectId; prevent cycles in project nesting | P0 | 10 | Todo |
-| B-43 | Migration backfill tasks → default phase | After creating default phase per project, assign tasks lacking phaseId | P0 | 10 | Todo |
+| B-43 | Migration backfill tasks → default phase | After creating default phase per project, assign tasks lacking phaseId | P0 | 10 | Done (runtime backfill on startup; SQL enforcement deferred) |
 | B-44 | Performance optimization (roll-up) | Incremental invalidation vs full recompute; benchmark >5k tasks | P2 | 10 | Todo |
 | B-45 | Phase archive behavior | Define effect on tasks (freeze? allow moves?); implement rules & tests | P1 | 10 | Todo |
 | B-46 | DevOps link health check | Background ping to repo/slack endpoints surfaced in status | P2 | 10 | Todo |
