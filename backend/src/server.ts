@@ -3,6 +3,8 @@ import cors from 'cors';
 import { nanoid } from 'nanoid';
 import { InMemoryTaskRepository } from './repositories/taskRepository.js';
 import { InMemoryBugRepository } from './repositories/bugRepository.js';
+import { InMemoryStatusUpdateRepository } from './repositories/statusUpdateRepository.js';
+import { InMemoryDesignNoteRepository } from './repositories/designNoteRepository.js';
 import { WebSocketServer, WebSocket } from 'ws';
 import { z } from 'zod';
 
@@ -18,8 +20,18 @@ const agents = new Map<string, Agent>();
 // Legacy direct Maps replaced by repositories
 const taskRepo = new InMemoryTaskRepository();
 const bugRepo = new InMemoryBugRepository();
+const statusUpdateRepo = new InMemoryStatusUpdateRepository();
+const designNoteRepo = new InMemoryDesignNoteRepository();
 const guidelines = new Map<string, Guideline>();
 const auditLog: { id: string; actor: string; entity: string; entityId: string; action: string; at: number; diff?: any }[] = [];
+const MAX_AUDIT_ENTRIES = parseInt(process.env.MAX_AUDIT_ENTRIES || '5000', 10);
+function pushAudit(entry: { id: string; actor: string; entity: string; entityId: string; action: string; at: number; diff?: any }) {
+  auditLog.push(entry);
+  if (auditLog.length > MAX_AUDIT_ENTRIES) {
+    const overflow = auditLog.length - MAX_AUDIT_ENTRIES;
+    auditLog.splice(0, overflow);
+  }
+}
 
 // Seed data
 const baseGuideline: Guideline = { id: 'g-base', category: 'general', version: 1, content: 'Initial guidelines. Refer to AGENT_GUIDELINES.md', updatedAt: Date.now() };
@@ -68,6 +80,15 @@ const bugSchema = z.object({
   proposedFix: z.string().optional()
 });
 
+const bugUpdateSchema = z.object({
+  title: z.string().min(3).max(120).optional(),
+  severity: z.enum(['low', 'medium', 'high', 'critical']).optional(),
+  proposedFix: z.string().optional(),
+  status: z.enum(['open','triaged','in_progress','resolved','closed']).optional(),
+  expectedVersion: z.number().int().positive(),
+  reproSteps: z.array(z.string().min(1)).min(1).optional()
+});
+
 // Routes
 app.post('/agents/register', (req: Request, res: Response) => {
   const { name, role } = req.body || {};
@@ -93,7 +114,7 @@ app.post('/tasks', auth, (req: Request, res: Response) => {
   if (!title) return fail(res, new ApiError('title_required', 400));
   const task = taskRepo.create({ title, priority });
   const actor = (req as any).agent?.id || 'system';
-  auditLog.push({ id: nanoid(10), actor, entity: 'task', entityId: task.id, action: 'created', at: Date.now(), diff: { status: { to: 'todo' } } });
+  pushAudit({ id: nanoid(10), actor, entity: 'task', entityId: task.id, action: 'created', at: Date.now(), diff: { status: { to: 'todo' } } });
   broadcast({ type: 'task.created', task });
   return ok(res, task, 201);
 });
@@ -115,7 +136,7 @@ app.post('/tasks/:id/transition', auth, (req: Request, res: Response) => {
   task.version += 1;
   const entry = `[${new Date().toISOString()}] ${agent.id} -> ${newStatus} :: ${rationale}${confidence !== undefined ? ` (conf=${confidence})` : ''}`;
   task.rationaleLog.push(entry);
-  auditLog.push({ id: nanoid(10), actor: agent.id, entity: 'task', entityId: task.id, action: 'status_change', at: Date.now(), diff: { status: { from: prevStatus, to: newStatus } } });
+  pushAudit({ id: nanoid(10), actor: agent.id, entity: 'task', entityId: task.id, action: 'status_change', at: Date.now(), diff: { status: { from: prevStatus, to: newStatus } } });
   taskRepo.save(task);
   broadcast({ type: 'task.updated', task });
   return ok(res, task);
@@ -129,6 +150,25 @@ app.post('/bugs', auth, (req: Request, res: Response) => {
   const bug = bugRepo.create({ title: parse.data.title, severity: parse.data.severity, taskId: parse.data.taskId, reproSteps: parse.data.reproSteps, proposedFix: parse.data.proposedFix });
   broadcast({ type: 'bug.created', bug });
   return ok(res, bug, 201);
+});
+
+app.patch('/bugs/:id', auth, (req: Request, res: Response) => {
+  const parse = bugUpdateSchema.safeParse(req.body);
+  if (!parse.success) return fail(res, new ApiError('validation_failed', 400, 'validation_failed', parse.error.flatten()));
+  const bug = bugRepo.getById(req.params.id);
+  if (!bug) return fail(res, new ApiError('not_found', 404));
+  if ((bug.version || 1) !== parse.data.expectedVersion) return fail(res, new ApiError('version_conflict', 409, 'version_conflict', { currentVersion: bug.version }));
+  const prev = { ...bug };
+  if (parse.data.title) bug.title = parse.data.title;
+  if (parse.data.severity) bug.severity = parse.data.severity as any;
+  if (parse.data.proposedFix !== undefined) bug.proposedFix = parse.data.proposedFix;
+  if (parse.data.status) bug.status = parse.data.status as any;
+  if (parse.data.reproSteps) bug.reproSteps = parse.data.reproSteps;
+  bug.version = (bug.version || 1) + 1;
+  bugRepo.save(bug as any);
+  pushAudit({ id: nanoid(10), actor: (req as any).agent.id, entity: 'bug', entityId: bug.id, action: 'updated', at: Date.now(), diff: { version: { from: prev.version, to: bug.version } } });
+  broadcast({ type: 'bug.updated', bug });
+  return ok(res, bug);
 });
 
 app.get('/guidelines', auth, (_req: Request, res: Response) => ok(res, [...guidelines.values()]));
@@ -163,6 +203,59 @@ app.get('/audit', auth, (req: Request, res: Response) => {
   return ok(res, auditLog.slice(-limit));
 });
 
+// Status Updates (Phase 2)
+const statusUpdateSchema = z.object({
+  message: z.string().min(3).max(500),
+  taskId: z.string().optional()
+});
+
+app.get('/status-updates', auth, (req: Request, res: Response) => {
+  const limit = Math.min(Number(req.query.limit) || 50, 200);
+  const offset = Math.max(Number(req.query.offset) || 0, 0);
+  const taskId = req.query.taskId as string | undefined;
+  const since = req.query.since ? Number(req.query.since) : undefined;
+  let list = statusUpdateRepo.list(10000, taskId); // pull full for filter then slice
+  if (since) list = list.filter(u => u.createdAt >= since);
+  const window = list.slice(-(offset + limit)).slice(0, limit); // slice from end applying offset
+  return ok(res, window);
+});
+
+app.post('/status-updates', auth, (req: Request, res: Response) => {
+  const parsed = statusUpdateSchema.safeParse(req.body);
+  if (!parsed.success) return fail(res, new ApiError('validation_failed', 400, 'validation_failed', parsed.error.flatten()));
+  const agent: Agent = (req as any).agent;
+  const update = statusUpdateRepo.create({ actor: agent.id, message: parsed.data.message, taskId: parsed.data.taskId });
+  pushAudit({ id: nanoid(10), actor: agent.id, entity: 'status_update', entityId: update.id, action: 'created', at: Date.now(), diff: { message: { to: update.message } } });
+  broadcast({ type: 'status_update.created', update });
+  return ok(res, update, 201);
+});
+
+// Design Notes (Phase 2)
+const designNoteSchema = z.object({
+  title: z.string().min(3).max(120),
+  context: z.string().min(10).max(2000),
+  decision: z.string().min(5).max(2000),
+  consequences: z.string().min(5).max(2000)
+});
+
+app.get('/design-notes', auth, (req: Request, res: Response) => {
+  const limit = Math.min(Number(req.query.limit) || 50, 200);
+  const offset = Math.max(Number(req.query.offset) || 0, 0);
+  const notes = designNoteRepo.list(10000); // large cap, then paginate from newest
+  const window = notes.slice(-(offset + limit)).slice(0, limit);
+  return ok(res, window);
+});
+
+app.post('/design-notes', auth, (req: Request, res: Response) => {
+  const parsed = designNoteSchema.safeParse(req.body);
+  if (!parsed.success) return fail(res, new ApiError('validation_failed', 400, 'validation_failed', parsed.error.flatten()));
+  const agent: Agent = (req as any).agent;
+  const note = designNoteRepo.create({ actor: agent.id, ...parsed.data });
+  pushAudit({ id: nanoid(10), actor: agent.id, entity: 'design_note', entityId: note.id, action: 'created', at: Date.now(), diff: { title: { to: note.title } } });
+  broadcast({ type: 'design_note.created', note });
+  return ok(res, note, 201);
+});
+
 // Fallback 404
 app.use((req, res) => fail(res, new ApiError('not_found', 404, `Route ${req.method} ${req.path} not found`)));
 
@@ -192,4 +285,4 @@ wss.on('connection', (ws: WebSocket) => {
   ws.send(JSON.stringify({ type: 'hello', ts: Date.now() }));
 });
 
-export { app, agents, taskRepo, bugRepo, guidelines, auditLog };
+export { app, agents, taskRepo, bugRepo, guidelines, auditLog, statusUpdateRepo, designNoteRepo };

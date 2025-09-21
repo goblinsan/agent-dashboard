@@ -1,8 +1,8 @@
 openapi: 3.0.3
 info:
   title: AI Agent Dashboard API
-  version: 0.1.1
-  description: Minimal API for coordinating agents (Phase 0/1 draft) - response envelope added
+  version: 0.3.2
+  description: API for coordinating agents (Phase 2 bug patch + pagination)
 servers:
   - url: http://localhost:4000
 paths:
@@ -222,6 +222,54 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
+  /bugs/{id}:
+    patch:
+      summary: Update bug (optimistic concurrency)
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [expectedVersion]
+              properties:
+                title: { type: string, minLength: 3, maxLength: 120 }
+                severity: { type: string, enum: [low, medium, high, critical] }
+                proposedFix: { type: string }
+                status: { type: string, enum: [open, triaged, in_progress, resolved, closed] }
+                reproSteps:
+                  type: array
+                  items: { type: string }
+                  description: Full replacement list of reproduction steps
+                expectedVersion: { type: integer, minimum: 1, description: Must match current bug version }
+      responses:
+        '200':
+          description: Updated bug
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessBug' }
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '409':
+          description: Version conflict
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
   /audit:
     get:
       summary: Recent audit entries
@@ -243,6 +291,146 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SuccessAudit'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '500':
+          description: Internal error
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+  /status-updates:
+    get:
+      summary: List recent status updates
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+          description: Max number of updates (<=200)
+        - in: query
+          name: taskId
+          schema: { type: string }
+          description: Optional filter by task id
+        - in: query
+          name: since
+          schema: { type: integer }
+          description: Filter to updates with createdAt >= since (epoch ms)
+        - in: query
+          name: offset
+          schema: { type: integer, minimum: 0, default: 0 }
+          description: Offset from newest (e.g. 0 newest window, 10 skip 10 newest)
+      responses:
+        '200':
+          description: Status updates list
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessStatusUpdates' }
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '500':
+          description: Internal error
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+  /design-notes:
+    get:
+      summary: List recent design notes
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+          description: Max number of notes (<=200)
+        - in: query
+          name: offset
+          schema: { type: integer, minimum: 0, default: 0 }
+          description: Offset from newest (pagination)
+      responses:
+        '200':
+          description: Design notes list
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessDesignNotes' }
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '500':
+          description: Internal error
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+    post:
+      summary: Create design note
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title, context, decision, consequences]
+              properties:
+                title: { type: string, minLength: 3, maxLength: 120 }
+                context: { type: string, minLength: 10, maxLength: 2000 }
+                decision: { type: string, minLength: 5, maxLength: 2000 }
+                consequences: { type: string, minLength: 5, maxLength: 2000 }
+      responses:
+        '201':
+          description: Created design note
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessDesignNote' }
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '500':
+          description: Internal error
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+    post:
+      summary: Create status update
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [message]
+              properties:
+                message: { type: string, minLength: 3, maxLength: 500 }
+                taskId: { type: string }
+      responses:
+        '201':
+          description: Created status update
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessStatusUpdate' }
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
         '401':
           description: Unauthorized
           content:
@@ -308,6 +496,7 @@ components:
           items: { type: string }
         proposedFix: { type: string }
         createdAt: { type: integer }
+        version: { type: integer, description: Incremented on each successful update }
     AuditEntry:
       type: object
       properties:
@@ -318,6 +507,25 @@ components:
         action: { type: string }
         at: { type: integer }
         diff: { type: object }
+    StatusUpdate:
+      type: object
+      properties:
+        id: { type: string }
+        actor: { type: string }
+        taskId: { type: string }
+        message: { type: string }
+        createdAt: { type: integer }
+    DesignNote:
+      type: object
+      properties:
+        id: { type: string }
+        title: { type: string }
+        context: { type: string }
+        decision: { type: string }
+        consequences: { type: string }
+        createdAt: { type: integer }
+        supersededBy: { type: string }
+        actor: { type: string }
     SuccessHealthz:
       allOf:
         - $ref: '#/components/schemas/SuccessEnvelope'
@@ -385,3 +593,33 @@ components:
             data:
               type: array
               items: { $ref: '#/components/schemas/AuditEntry' }
+    SuccessStatusUpdate:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/StatusUpdate'
+    SuccessStatusUpdates:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              type: array
+              items: { $ref: '#/components/schemas/StatusUpdate' }
+    SuccessDesignNote:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/DesignNote'
+    SuccessDesignNotes:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              type: array
+              items: { $ref: '#/components/schemas/DesignNote' }
