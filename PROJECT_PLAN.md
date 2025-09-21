@@ -1,13 +1,13 @@
 # Project Plan: AI Agent Dashboard
 
-Last Updated: 2025-09-21T15:05:00Z
+Last Updated: 2025-09-21T15:25:00Z
 Auto-Refresh Directive: After any task moves to Done, the responsible agent MUST (a) update status fields, (b) add emergent follow-up tasks, (c) prune obsolete tasks, and (d) refresh the Logical Next Steps section timestamp.
 
 ## 1. Vision & High-Level Goal
-Provide a shared, machine-readable and human-friendly dashboard through which multiple specialized AI (and human) agents can: (1) ingest project direction, constraints, and current status; (2) create, update, and complete tasks, bug reports, and design docs; (3) maintain auditable change history; and (4) converge quickly on an MVP that proves value.
+Provide a shared, machine-readable and human-friendly dashboard through which multiple specialized AI (and human) agents can: (1) ingest project direction, constraints, and current status; (2) create, update, and complete tasks, bug reports, and design docs; (3) maintain auditable change history; (4) converge quickly on an MVP that proves value; and (5) (post-MVP) manage and switch between multiple projects from a unified interface.
 
 ### Core Outcome (MVP)
-An operational backend + minimal UI (or structured API endpoints) enabling:
+An operational backend + minimal UI (or structured API endpoints) enabling (single-project MVP now complete; multi-project support planned):
 1. Create/read/update tasks with status transitions and ownership.
 2. Submit status updates and design notes with timestamps and provenance.
 3. Log bug reports with severity, reproduction steps, and linkage to tasks.
@@ -57,7 +57,7 @@ MVP Status: ✅ COMPLETE (all exit criteria satisfied; further changes tracked a
 | Phase | Theme | Objective | High-Level Outcomes |
 |-------|-------|----------|---------------------|
 | 5 | Observability & Automation | Surface system health & accelerate feedback loops | `/metrics`, counters, latency sampling, anomaly heuristic, daily digest scaffold |
-| 6 | UI Enhancements & UX | Improve usability & reduce context switching | Soft-delete visibility & restore UI, design notes panel, richer task detail, WebSocket push |
+| 6 | UI Enhancements & UX | Improve usability, multi-project context & reduce context switching | Project selector & creation UI, soft-delete visibility & restore UI, design notes panel, richer task detail, WebSocket push |
 | 7 | Security & Reliability | Harden platform & gate risky changes | Vulnerability severity enforcement, rate limiting, auth expansion, audit persistence decision |
 | 8 | Scale & Data Evolution | Prepare for higher volume & pagination robustness | Cursor pagination, retention policies, hard purge workflow, upsert-aware import |
 | 9 | Collaboration & Extensibility | Integrations & notification pathways | Webhook queue, subscription filters, multi-agent presence, pluggable event hooks |
@@ -87,6 +87,12 @@ Single authoritative backlog. "Priority" uses P0 (near-term), P1 (important), P2
 | B-18 | WebSocket auth tightening | Validate API key on upgrade | P2 | 7 | Todo |
 | B-19 | Audit UI surface | Minimal UI page for recent audits | P2 | 6 | Todo |
 | B-20 | Vulnerability diff trend | Track deltas across CI runs | P2 | 7 | Todo |
+| B-21 | Project entity schema | Define Project (id, name, description, createdAt, archivedAt?) | P0 | 6 | Todo |
+| B-22 | Project reference propagation | Add projectId to tasks, bugs, status updates, design notes | P0 | 6 | Todo |
+| B-23 | Project CRUD API | Endpoints: create/list/archive/select (header or query) | P0 | 6 | Todo |
+| B-24 | Migration for project tables | SQLite migration + backfill existing records to default project | P0 | 6 | Todo |
+| B-25 | Project selection UI | Dropdown + create project inline (persists selection in localStorage) | P1 | 6 | Todo |
+| B-26 | Export/import multi-project aware | Include projects array & per-entity projectId in snapshot | P1 | 8 | Todo |
 
 Backlog Grooming Rule: After completing any P0/P1 item, reassess next 1–2 items for reprioritization; avoid pulling >2 concurrent P1 efforts.
 
@@ -101,11 +107,12 @@ Subsequent sections retain prior numbering intent but have been shifted.
 ## 3. Domain Model (Draft)
 | Entity | Key Fields | Notes |
 |--------|------------|-------|
-| Task | id, title, description, status, priority, owner, createdAt, updatedAt | Status enum: Todo, In-Progress, Blocked, Done |
-| BugReport | id, title, description, severity, stepsToReproduce, status, linkedTaskIds[], createdAt | Severity: Low/Med/High/Critical |
-| StatusUpdate | id, actor, scope(taskId|null), message, createdAt | Scope optional for global context |
-| DesignNote (ADR-lite) | id, title, context, decision, consequences, createdAt, supersededBy? | Keep short/formal |
-| AuditEntry | id, actor, entityType, entityId, action, diff, createdAt | Append-only |
+| Project | id, name, description?, createdAt, archivedAt? | Logical container for all other entities |
+| Task | id, projectId, title, description, status, priority, owner, createdAt, updatedAt, deletedAt? | Status: todo/in_progress/blocked/done |
+| BugReport | id, projectId, title, description, severity, stepsToReproduce, status, linkedTaskIds[], createdAt, deletedAt? | Severity: low/medium/high/critical |
+| StatusUpdate | id, projectId, actor, scope(taskId|null), message, createdAt | projectId defaults to selected project context |
+| DesignNote (ADR-lite) | id, projectId, title, context, decision, consequences, createdAt, supersededBy?, deletedAt? | Multi-project scoping |
+| AuditEntry | id, projectId, actor, entityType, entityId, action, diff, createdAt | Enables project-scoped filtering |
 
 ## 4. Bug Report Table (Active Bugs)
 | Bug ID | Title | Severity | Status | Linked Tasks | Reported | Notes |
@@ -145,6 +152,7 @@ Timestamp: 2025-09-21T12:40:00Z
 | Low | Vulnerability severity enforcement (EB-4) | Strengthen security gate | Security |
 | Low | Audit log persistence reconsideration (P3-12) | Post-MVP decision | Architect |
 | Low | Metrics design doc (P5 prep) | Prepare observability phase | Dev |
+| Medium | Project schema & selection design (B-21/B-22) | Enable multi-project groundwork | Architect |
 
 Refresh Instructions: When any above action completes, update its source table, remove or demote it here, add newly emergent actions, and reset the timestamp to current ISO.
 
