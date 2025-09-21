@@ -6,7 +6,8 @@ let apiKey: string;
 
 beforeAll(async () => {
   const res = await request(app).post('/agents/register').send({ name: 'test-agent', role: 'dev' });
-  apiKey = res.body.apiKey;
+  expect(res.body.success).toBe(true);
+  apiKey = res.body.data.apiKey;
 });
 
 describe('Task lifecycle', () => {
@@ -17,9 +18,10 @@ describe('Task lifecycle', () => {
       .send({ title: 'Sample Task' })
       .expect(201);
 
-    expect(create.body.status).toBe('todo');
+  expect(create.body.success).toBe(true);
+  expect(create.body.data.status).toBe('todo');
 
-    const taskId = create.body.id;
+  const taskId = create.body.data.id;
 
     const start = await request(app)
       .post(`/tasks/${taskId}/transition`)
@@ -27,7 +29,8 @@ describe('Task lifecycle', () => {
       .send({ newStatus: 'in_progress', rationale: 'Starting', expectedVersion: 1 })
       .expect(200);
 
-    expect(start.body.status).toBe('in_progress');
+  expect(start.body.success).toBe(true);
+  expect(start.body.data.status).toBe('in_progress');
 
     const done = await request(app)
       .post(`/tasks/${taskId}/transition`)
@@ -35,6 +38,7 @@ describe('Task lifecycle', () => {
       .send({ newStatus: 'done', rationale: 'Finished', expectedVersion: 2 })
       .expect(200);
 
-    expect(done.body.status).toBe('done');
+  expect(done.body.success).toBe(true);
+  expect(done.body.data.status).toBe('done');
   });
 });

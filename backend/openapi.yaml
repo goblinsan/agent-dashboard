@@ -1,8 +1,8 @@
 openapi: 3.0.3
 info:
   title: AI Agent Dashboard API
-  version: 0.1.0
-  description: Minimal API for coordinating agents (Phase 0/1 draft)
+  version: 0.1.1
+  description: Minimal API for coordinating agents (Phase 0/1 draft) - response envelope added
 servers:
   - url: http://localhost:4000
 paths:
@@ -15,18 +15,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  status: { type: string }
-                  version: { type: string }
-                  uptimeMs: { type: number }
-                  counts:
-                    type: object
-                    properties:
-                      tasks: { type: integer }
-                      agents: { type: integer }
-                      bugs: { type: integer }
-                  timestamp: { type: number }
+                $ref: '#/components/schemas/SuccessHealthz'
   /agents/register:
     post:
       summary: Register a new agent
@@ -46,10 +35,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  id: { type: string }
-                  apiKey: { type: string }
+                $ref: '#/components/schemas/SuccessAgentRegistration'
   /tasks:
     get:
       summary: List tasks
@@ -67,8 +53,7 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items: { $ref: '#/components/schemas/Task' }
+                $ref: '#/components/schemas/SuccessTasks'
     post:
       summary: Create task
       security:
@@ -88,7 +73,7 @@ paths:
           description: Created
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/Task' }
+              schema: { $ref: '#/components/schemas/SuccessTask' }
   /tasks/{id}/transition:
     post:
       summary: Transition task status
@@ -116,7 +101,22 @@ paths:
           description: Updated task
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/Task' }
+              schema: { $ref: '#/components/schemas/SuccessTask' }
+        '400':
+          description: Validation / transition error
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '409':
+          description: Version conflict
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
   /bugs:
     get:
       summary: List bugs
@@ -128,8 +128,7 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items: { $ref: '#/components/schemas/BugReport' }
+                $ref: '#/components/schemas/SuccessBugs'
     post:
       summary: Create bug report
       security:
@@ -154,20 +153,28 @@ paths:
           description: Created
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/BugReport' }
+              schema: { $ref: '#/components/schemas/SuccessBug' }
   /audit:
     get:
       summary: Recent audit entries
       security:
         - ApiKeyAuth: []
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 200
+          description: Max entries to return (<=500)
       responses:
         '200':
           description: Audit log slice
           content:
             application/json:
               schema:
-                type: array
-                items: { $ref: '#/components/schemas/AuditEntry' }
+                $ref: '#/components/schemas/SuccessAudit'
 components:
   securitySchemes:
     ApiKeyAuth:
@@ -175,6 +182,28 @@ components:
       in: header
       name: x-api-key
   schemas:
+    SuccessEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+          const: true
+        data: { description: Wrapped payload }
+      required: [success, data]
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          const: false
+        error:
+          type: object
+          properties:
+            code: { type: string }
+            message: { type: string }
+            details: { description: Optional structured details }
+          required: [code, message]
+      required: [success, error]
     Task:
       type: object
       properties:
@@ -211,3 +240,70 @@ components:
         action: { type: string }
         at: { type: integer }
         diff: { type: object }
+    SuccessHealthz:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                status: { type: string }
+                version: { type: string }
+                uptimeMs: { type: number }
+                counts:
+                  type: object
+                  properties:
+                    tasks: { type: integer }
+                    agents: { type: integer }
+                    bugs: { type: integer }
+                timestamp: { type: number }
+    SuccessAgentRegistration:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                id: { type: string }
+                apiKey: { type: string }
+              required: [id, apiKey]
+    SuccessTask:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/Task'
+    SuccessTasks:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              type: array
+              items: { $ref: '#/components/schemas/Task' }
+    SuccessBug:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/BugReport'
+    SuccessBugs:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              type: array
+              items: { $ref: '#/components/schemas/BugReport' }
+    SuccessAudit:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              type: array
+              items: { $ref: '#/components/schemas/AuditEntry' }
