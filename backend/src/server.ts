@@ -6,6 +6,7 @@ import { z } from 'zod';
 
 // In-memory stores
 interface Agent { id: string; name: string; apiKey: string; role?: string; lastHeartbeat?: number; currentTaskId?: string; }
+// NOTE: Legacy status values kept ('open','completed') pending migration to ('todo','done').
 interface Task { id: string; title: string; status: 'open' | 'in_progress' | 'blocked' | 'completed'; version: number; assignees: string[]; priority?: string; rationaleLog: string[]; }
 interface Bug { id: string; title: string; severity: 'low' | 'medium' | 'high' | 'critical'; taskId?: string; reproSteps: string[]; proposedFix?: string; createdAt: number; }
 interface Guideline { id: string; category: string; version: number; content: string; updatedAt: number; }
@@ -127,8 +128,23 @@ app.post('/agents/:id/heartbeat', auth, (req: Request, res: Response) => {
 });
 
 // Health endpoint
+// Health & uptime endpoints
+const startTime = Date.now();
+const apiVersion = '0.1.0';
+
 app.get('/health', (_req: Request, res: Response) => {
-  res.json({ ok: true, tasks: tasks.size, agents: agents.size, ts: Date.now() });
+  res.json({ ok: true, tasks: tasks.size, agents: agents.size, version: apiVersion, ts: Date.now() });
+});
+
+app.get('/healthz', (_req: Request, res: Response) => {
+  const now = Date.now();
+  res.json({
+    status: 'ok',
+    version: apiVersion,
+    uptimeMs: now - startTime,
+    counts: { tasks: tasks.size, agents: agents.size, bugs: bugs.size },
+    timestamp: now
+  });
 });
 
 // WebSocket events

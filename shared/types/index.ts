@@ -9,28 +9,40 @@ export interface Agent {
   currentTaskId?: string;
 }
 
-export type TaskStatus = 'open' | 'in_progress' | 'blocked' | 'completed';
+// Align statuses with plan (Todo, In-Progress, Blocked, Done)
+export type TaskStatus = 'todo' | 'in_progress' | 'blocked' | 'done';
 
 export interface Task {
   id: string;
   title: string;
+  description?: string;
   status: TaskStatus;
-  version: number;
-  assignees: string[];
-  priority?: string;
-  rationaleLog: string[];
+  priority?: 'low' | 'medium' | 'high' | 'critical';
+  owner?: string; // singular primary owner for accountability
+  assignees: string[]; // optional collaborators
+  createdAt: number; // epoch ms
+  updatedAt: number; // epoch ms
+  version: number; // optimistic concurrency control
+  rationaleLog: string[]; // decision/rationale snapshots
+  linkedBugIds?: string[];
 }
 
 export type BugSeverity = 'low' | 'medium' | 'high' | 'critical';
 
-export interface Bug {
+export type BugStatus = 'open' | 'triaged' | 'in_progress' | 'resolved' | 'closed';
+
+export interface BugReport {
   id: string;
   title: string;
+  description?: string;
   severity: BugSeverity;
-  taskId?: string;
+  status: BugStatus;
+  linkedTaskIds: string[];
   reproSteps: string[];
   proposedFix?: string;
+  reporter?: string;
   createdAt: number;
+  updatedAt: number;
 }
 
 export interface Guideline {
@@ -48,7 +60,7 @@ export interface PrioritySummary {
 }
 
 export interface TransitionRequest {
-  newStatus: Exclude<TaskStatus, 'open'>;
+  newStatus: Exclude<TaskStatus, 'todo'>;
   rationale: string;
   confidence?: number;
   expectedVersion: number;
@@ -57,7 +69,43 @@ export interface TransitionRequest {
 export interface BugCreateRequest {
   title: string;
   severity: BugSeverity;
-  taskId?: string;
+  linkedTaskIds?: string[];
   reproSteps: string[];
   proposedFix?: string;
 }
+
+// Status update entity (global or task-scoped)
+export interface StatusUpdate {
+  id: string;
+  actor: string; // agent or user id
+  taskId?: string; // optional linking
+  message: string;
+  createdAt: number;
+}
+
+// ADR-lite / design note
+export interface DesignNote {
+  id: string;
+  title: string;
+  context: string;
+  decision: string;
+  consequences: string;
+  createdAt: number;
+  supersededBy?: string;
+}
+
+// Audit log entry for all mutations
+export interface AuditEntry {
+  id: string;
+  actor: string;
+  entityType: 'task' | 'bug' | 'status_update' | 'design_note';
+  entityId: string;
+  action: string; // e.g., created, updated, status_changed
+  diff?: Record<string, { from: unknown; to: unknown }>; // field-level diff
+  timestamp: number;
+}
+
+// Generic API response wrappers (optional early pattern)
+export interface ApiSuccess<T> { success: true; data: T; }
+export interface ApiError { success: false; error: { code: string; message: string; details?: unknown }; }
+export type ApiResponse<T> = ApiSuccess<T> | ApiError;
