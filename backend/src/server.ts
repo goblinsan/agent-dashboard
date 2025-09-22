@@ -10,6 +10,7 @@ import { InMemoryPhaseRepository } from './repositories/phaseRepository.js';
 import { WebSocketServer, WebSocket } from 'ws';
 import { z } from 'zod';
 import { computeProjectStatus, computeAggregatedProjectStatus, invalidateProjectStatus } from './services/projectStatus.js';
+import { recordRequestStart, recordRequestEnd, snapshotMetrics } from './services/metrics.js';
 
 // In-memory stores & types
 interface Agent { id: string; name: string; apiKey: string; role?: string; lastHeartbeat?: number; currentTaskId?: string; }
@@ -109,6 +110,21 @@ const sampleTask = taskRepo.create({ title: 'Implement core API', projectId: DEF
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: '200kb' }));
+
+// Metrics instrumentation middleware (after json parsing)
+app.use((req: Request, res: Response, next: NextFunction) => {
+  const start = Date.now();
+  const routeKey = `${req.method} ${req.path}`;
+  recordRequestStart(routeKey);
+  const origJson = res.json.bind(res);
+  res.json = function (body: any) {
+    const latency = Date.now() - start;
+    const errored = body && body.success === false;
+    recordRequestEnd(routeKey, latency, errored);
+    return origJson(body);
+  } as any;
+  next();
+});
 
 // Utility helpers
 class ApiError extends Error {
@@ -556,6 +572,12 @@ app.get('/projects/:id/status', auth, (req: Request, res: Response) => {
   return ok(res, snapshot);
 });
 
+// Metrics endpoint (Phase 5 slice)
+app.get('/metrics', (req: Request, res: Response) => {
+  const snap = snapshotMetrics();
+  return ok(res, snap);
+});
+
 // Move task between phases
 app.patch('/tasks/:id/move', auth, (req: Request, res: Response) => {
   const parse = taskMoveSchema.safeParse(req.body);
@@ -658,7 +680,8 @@ app.use((req, res) => fail(res, new ApiError('not_found', 404, `Route ${req.meth
 
 // Error handler
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
+  // We can't know original start timestamp here; rely on middleware instrumentation already having recorded end via json override, so only bump errors if not ApiError? Already handled in json wrapper.
   if (err instanceof ApiError) return fail(res, err);
   console.error('Unhandled error', err);
   return fail(res, new ApiError('internal_error', 500));

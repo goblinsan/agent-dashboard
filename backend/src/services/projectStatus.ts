@@ -1,4 +1,5 @@
 import { projectRepo, phaseRepo, taskRepo } from '../server.js';
+import { recordCacheHit, recordCacheMiss } from './metrics.js';
 
 // Simple in-memory caches (non-persistent, invalidated on mutations)
 interface CacheEntry<T> { value: T; ts: number }
@@ -87,7 +88,8 @@ interface AggregatedStatus extends ProjectStatusSnapshot {
 
 export function computeAggregatedProjectStatus(projectId: string): AggregatedStatus | undefined {
   const cached = AGG_STATUS_CACHE.get(projectId);
-  if (isFresh(cached)) return cached!.value;
+  if (isFresh(cached)) { recordCacheHit(); return cached!.value; }
+  recordCacheMiss();
   const base = computeProjectStatus(projectId);
   if (!base) return;
   if (!projectRepo.listChildren) return base;
