@@ -36,9 +36,11 @@ interface ProjectStatusSnapshot {
 export function computeProjectStatus(projectId: string): ProjectStatusSnapshot | undefined {
   const proj = projectRepo.getById(projectId);
   if (!proj || proj.archivedAt) return; // inactive or missing
+  // Active (non-archived) phases only; tasks tied to archived phases are excluded from denominator per plan semantics
   const phases = phaseRepo.list(projectId, false); // exclude archived phases
+  const activePhaseIds = new Set(phases.map((p: any) => p.id));
   const tasks = taskRepo.list({ projectId });
-  const activeTasks = tasks.filter((t: any) => !t.deletedAt);
+  const activeTasks = tasks.filter((t: any) => !t.deletedAt && (!t.phaseId || activePhaseIds.has(t.phaseId)));
   const done = activeTasks.filter((t: any) => t.status === 'done').length;
   const total = activeTasks.length;
   const completionPct = total === 0 ? 0 : (done / total) * 100;

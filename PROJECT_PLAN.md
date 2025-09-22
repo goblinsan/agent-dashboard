@@ -1,6 +1,6 @@
 # Project Plan: AI Agent Dashboard
 
-Last Updated: 2025-09-21T19:10:30Z
+Last Updated: 2025-09-21T19:25:00Z
 Auto-Refresh Directive: After any task moves to Done, the responsible agent MUST (a) update status fields, (b) add emergent follow-up tasks, (c) prune obsolete tasks, and (d) refresh the Logical Next Steps section timestamp.
 
 ## 1. Vision & High-Level Goal
@@ -68,8 +68,8 @@ Single authoritative backlog. "Priority" uses P0 (near-term), P1 (important), P2
 
 | ID | Title | Description | Priority | Target Phase | Status |
 |----|-------|------------|----------|--------------|--------|
-| B-1 | Metrics instrumentation | In-memory counters (reqs, errors, latency buckets) | P0 | 5 | Todo |
-| B-2 | `/metrics` endpoint | Expose JSON metrics snapshot | P0 | 5 | Todo |
+| B-1 | Metrics instrumentation | In-memory counters (reqs, errors, latency, cache hit/miss) – latency buckets & advanced histograms deferred | P0 | 5 | Partial |
+| B-2 | `/metrics` endpoint | Expose JSON metrics snapshot | P0 | 5 | Done |
 | B-3 | Dependency severity gate | Fail CI on high/critical vulns (configurable) | P0 | 7 | Todo |
 | B-4 | Soft-delete UI toggle & restore buttons | Show deleted entities & allow one-click restore | P0 | 6 | Todo |
 | B-5 | Design notes panel | Read-only list (title + decision snippet) | P1 | 6 | Todo |
@@ -108,7 +108,7 @@ Single authoritative backlog. "Priority" uses P0 (near-term), P1 (important), P2
 | B-38 | Rubric & security docs UI | Read-only render of markdown fields with basic sanitation | P2 | 10 | Todo |
 | B-39 | Project metadata edit API | PATCH endpoints for rubric/security/devOps links | P1 | 10 | Todo |
 | B-40 | Hierarchical export/import | Extend snapshot format with phases, parentProjectId, phase/task ordering | P1 | 10 | Todo |
-| B-41 | Roll-up test suite | Unit tests for completion math across nested projects & phase/task edge cases | P0 | 10 | Partial (multi-level integration test added; edge-case unit tests pending) |
+| B-41 | Roll-up test suite | Unit tests for completion math across nested projects & phase/task edge cases | P0 | 10 | Partial (multi-level + archived phase & soft-delete exclusions covered; remaining edge cases: archived project child, phase reorder impact) |
 | B-42 | Data validation guards | Ensure phase.projectId matches task.projectId; prevent cycles in project nesting | P0 | 10 | Todo |
 | B-43 | Migration backfill tasks → default phase | After creating default phase per project, assign tasks lacking phaseId | P0 | 10 | Done (runtime backfill on startup; SQL enforcement deferred) |
 | B-44 | Performance optimization (roll-up) | Incremental invalidation vs full recompute; benchmark >5k tasks | P2 | 10 | Todo |
@@ -168,12 +168,12 @@ Subsequent sections retain prior numbering intent but have been shifted.
 | Over-automation early | Waste | Medium | Manual first policy |
 
 ## 8. Logical Next Steps (Auto-Refresh Section)
-Timestamp: 2025-09-21T19:10:30Z
+Timestamp: 2025-09-21T19:25:00Z
 | Priority | Action | Rationale | Owner |
 |----------|--------|-----------|-------|
 | High | Phase migration backfill & NOT NULL enforcement (B-28/B-43) | Complete transition; ensure every task assigned a phase | Dev |
 | High | Recursive roll-up & extended tests (B-34 extension, B-41) | Support deeper hierarchies prior to UI surfacing | Dev |
-| High | Metrics instrumentation (B-1) | Observe cache behavior & baseline performance | Dev |
+| Medium | Metrics refinement (B-1 follow-up) | Add latency buckets/percentiles & anomaly heuristic | Dev |
 | Medium | Metadata schema & edit API (B-32/B-39) | Enable richer project context for agents | Architect |
 | Medium | Export/import hierarchy & phases spec (B-40) | Preserve structure across snapshots | PM |
 | Low | Incremental roll-up optimization research (B-44) | Plan scale path >5k tasks | Dev |
