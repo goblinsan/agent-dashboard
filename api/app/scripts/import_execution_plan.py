@@ -87,7 +87,7 @@ PLAN = {
                 {
                     "name": "Future Enhancements",
                     "tasks": [
-                        {"title": "Personas registry + limits (read-only UI)", "status": "in_progress"},
+                        {"title": "Personas registry + limits (read-only UI)", "status": "done"},
                         {"title": "Basic bug tracker (CRUD, link to tasks)", "status": "not_started"},
                         {"title": "Event log (append-only) + activity view", "status": "not_started"},
                     ],
@@ -244,3 +244,4 @@ def import_execution_plan() -> None:
 
 if __name__ == "__main__":
     import_execution_plan()
+
