@@ -8,7 +8,8 @@ from sqlalchemy.orm import Session
 
 from app.db import get_session
 from app.models import Project
-from app.schemas import ProjectCreate, ProjectRead
+from app.schemas import ProjectCreate, ProjectRead, ProjectStatusRead, ProjectNextActions
+from app.services import compute_project_status, select_next_actions
 
 router = APIRouter(prefix="/v1/projects", tags=["projects"])
 
@@ -37,3 +38,54 @@ def get_project(project_id: UUID, db: Session = Depends(get_session)) -> Project
     if project is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
     return ProjectRead.model_validate(project)
+
+
+
+
+@router.get("/{project_id}/status", response_model=ProjectStatusRead)
+def get_project_status(project_id: UUID, db: Session = Depends(get_session)) -> ProjectStatusRead:
+    project = db.get(Project, project_id)
+    if project is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+
+    status_summary = compute_project_status(db, project)
+    return ProjectStatusRead(
+        project_id=status_summary.project_id,
+        total_estimate=round(status_summary.total_estimate, 2),
+        remaining_effort=round(status_summary.remaining_effort, 2),
+        percent_complete=round(status_summary.percent_complete, 2),
+        status_breakdown=status_summary.status_breakdown,
+        milestones=[
+            {
+                "milestone_id": milestone.milestone_id,
+                "name": milestone.milestone_name,
+                "total_estimate": round(milestone.total_estimate, 2),
+                "remaining_effort": round(milestone.remaining_effort, 2),
+                "percent_complete": round(milestone.percent_complete, 2),
+            }
+            for milestone in status_summary.milestone_summaries
+        ],
+    )
+
+
+@router.get("/{project_id}/next-action", response_model=ProjectNextActions)
+def get_project_next_actions(project_id: UUID, db: Session = Depends(get_session)) -> ProjectNextActions:
+    project = db.get(Project, project_id)
+    if project is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+
+    suggestions = select_next_actions(db, project)
+    return ProjectNextActions(
+        project_id=project.id,
+        suggestions=[
+            {
+                "task_id": suggestion.task_id,
+                "title": suggestion.title,
+                "status": suggestion.status,
+                "persona_required": suggestion.persona_required,
+                "priority_score": suggestion.priority_score,
+                "reason": suggestion.reason,
+            }
+            for suggestion in suggestions
+        ],
+    )

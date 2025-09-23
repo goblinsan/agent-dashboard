@@ -2,7 +2,9 @@ import { FormEvent, useMemo, useState } from "react";
 
 import Layout from "../components/Layout";
 import { CreateMilestoneInput, useCreateMilestone, useMilestones } from "../hooks/useMilestones";
+import { useProjectNextActions } from "../hooks/useProjectNextActions";
 import { CreateProjectInput, useCreateProject, useProjects } from "../hooks/useProjects";
+import { useProjectStatus } from "../hooks/useProjectStatus";
 import { CreateTaskInput, useCreateTask, useTasks } from "../hooks/useTasks";
 
 export default function DashboardRoute() {
@@ -12,6 +14,8 @@ export default function DashboardRoute() {
   const { data: projects, isLoading: projectsLoading, error: projectsError } = useProjects();
   const { data: milestones } = useMilestones(selectedProject);
   const { data: tasks } = useTasks(selectedMilestone);
+  const { data: statusSummary } = useProjectStatus(selectedProject);
+  const { data: nextActions } = useProjectNextActions(selectedProject);
 
   const createProject = useCreateProject();
   const createMilestone = useCreateMilestone();
@@ -79,6 +83,55 @@ export default function DashboardRoute() {
         </section>
       </div>
 
+      {selectedProject && (
+        <section style={{ marginTop: "2rem" }}>
+          <h2 className="section-title">Status Overview</h2>
+          {statusSummary ? (
+            <div className="grid grid--two">
+              <div className="card">
+                <div className="item-title">Progress</div>
+                <p className="text-subtle" style={{ marginTop: "0.5rem" }}>
+                  {statusSummary.percent_complete.toFixed(1)}% complete
+                </p>
+                <p className="text-subtle">
+                  Remaining {statusSummary.remaining_effort.toFixed(1)}h of {statusSummary.total_estimate.toFixed(1)}h
+                </p>
+                <div style={{ marginTop: "0.75rem" }}>
+                  <small className="text-subtle">Status breakdown</small>
+                  <ul className="list" style={{ marginTop: "0.35rem" }}>
+                    {Object.entries(statusSummary.status_breakdown).map(([status, count]) => (
+                      <li key={status} className="text-subtle">
+                        {status}: {count}
+                      </li>
+                    ))}
+                    {Object.keys(statusSummary.status_breakdown).length === 0 && (
+                      <li className="text-subtle">No tasks yet.</li>
+                    )}
+                  </ul>
+                </div>
+              </div>
+
+              <div className="card">
+                <div className="item-title">Milestone roll-up</div>
+                <ul className="list" style={{ marginTop: "0.5rem" }}>
+                  {statusSummary.milestones.length === 0 && (
+                    <li className="text-subtle">Add a milestone to compute progress.</li>
+                  )}
+                  {statusSummary.milestones.map((milestone) => (
+                    <li key={milestone.milestone_id} className="text-subtle">
+                      <strong>{milestone.name}</strong>: {milestone.percent_complete.toFixed(1)}% • Remaining {" "}
+                      {milestone.remaining_effort.toFixed(1)}h
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          ) : (
+            <p className="empty-state">Status metrics will appear after tasks are added.</p>
+          )}
+        </section>
+      )}
+
       <section style={{ marginTop: "2rem" }}>
         <h2 className="section-title">Tasks {selectedProjectName ? `for ${selectedProjectName}` : ""}</h2>
         {selectedMilestone ? (
@@ -98,12 +151,39 @@ export default function DashboardRoute() {
                   </div>
                 </li>
               ))}
+              {!tasks?.length && <p className="empty-state">No tasks yet for this milestone.</p>}
             </ul>
           </>
         ) : (
           <p className="empty-state">Select a milestone to view tasks.</p>
         )}
       </section>
+
+      {selectedProject && (
+        <section style={{ marginTop: "2rem" }}>
+          <h2 className="section-title">Next Suggested Actions</h2>
+          {nextActions && nextActions.suggestions.length > 0 ? (
+            <ul className="list">
+              {nextActions.suggestions.map((suggestion) => (
+                <li key={suggestion.task_id}>
+                  <div className="card">
+                    <div className="item-title">{suggestion.title}</div>
+                    <div className="text-subtle">{suggestion.reason}</div>
+                    <span className="status-tag">Status: {suggestion.status}</span>
+                    {suggestion.persona_required && (
+                      <span className="status-tag" style={{ marginLeft: "0.5rem" }}>
+                        Persona: {suggestion.persona_required}
+                      </span>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="empty-state">Add tasks with priority to see suggested actions.</p>
+          )}
+        </section>
+      )}
     </Layout>
   );
 }

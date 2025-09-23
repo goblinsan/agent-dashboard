@@ -92,3 +92,33 @@ class TaskPatch(BaseModel):
     phase_id: Optional[UUID] = None
     parent_task_id: Optional[UUID] = None
     lock_version: int = Field(..., description="Current lock version for optimistic concurrency")
+
+class ProjectStatusMilestone(BaseModel):
+    milestone_id: UUID
+    name: str
+    total_estimate: float
+    remaining_effort: float
+    percent_complete: float
+
+
+class ProjectStatusRead(BaseModel):
+    project_id: UUID
+    total_estimate: float
+    remaining_effort: float
+    percent_complete: float
+    status_breakdown: dict[str, int]
+    milestones: list[ProjectStatusMilestone]
+
+
+class NextActionSuggestion(BaseModel):
+    task_id: UUID
+    title: str
+    status: str
+    persona_required: Optional[str] = None
+    priority_score: float
+    reason: str
+
+
+class ProjectNextActions(BaseModel):
+    project_id: UUID
+    suggestions: list[NextActionSuggestion]
