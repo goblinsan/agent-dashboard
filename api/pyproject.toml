@@ -2,6 +2,7 @@
 name = "madb-api"
 version = "0.1.0"
 description = "Multi-Agent Dashboard API"
+authors = ["47 Sunset Studios <dev.team@47sunsetstudios.com>"]
 
 [tool.poetry.dependencies]
 python = ">=3.11,<3.13"

@@ -5,10 +5,10 @@ Reach a usable vertical slice that lets us plan this project **inside** the prod
 
 ## Milestone: MVP0 — Vertical Slice
 - **Phase A — Infra & API skeleton (Day 1–2)**
-  - [ ] Docker compose (Postgres, Redis, API, Web)
-  - [ ] Alembic migration for `projects`, `milestones`, `phases`, `tasks` (phases optional)
-  - [ ] Endpoints: `.well-known/schemas`, `POST/GET /v1/projects`, `POST/GET /v1/milestones`, `POST/GET /v1/tasks`
-  - [ ] Optimistic locking on `PATCH /v1/tasks/:id`
+  - [x] Docker compose (Postgres, Redis, API, Web)
+  - [x] Alembic migration for `projects`, `milestones`, `phases`, `tasks` (phases optional)
+  - [x] Endpoints: `.well-known/schemas`, `POST/GET /v1/projects`, `POST/GET /v1/milestones`, `POST/GET /v1/tasks`
+  - [x] Optimistic locking on `PATCH /v1/tasks/:id`
 - **Phase B — Web UI skeleton (Day 2–3)**
   - [ ] Dashboard list of projects
   - [ ] Create project form (barebones)
@@ -30,3 +30,4 @@ Reach a usable vertical slice that lets us plan this project **inside** the prod
 
 ## Definition of Done
 - We can manage this execution plan entirely from the app: add tasks, mark progress, see remaining, and view Next Suggested Action.
+
