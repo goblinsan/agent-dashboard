@@ -11,3 +11,9 @@
 ## Manually rerunning migrations
 
 If you need to apply migrations again, use `docker-compose exec api poetry run alembic upgrade head`.
+
+## Seeding the Execution Plan
+
+Run `docker-compose exec api poetry run python -m app.scripts.import_execution_plan` to create the Multi-Agent Project Dashboard project with milestones and tasks taken from `docs/Execution_Plan_Dogfood_MVP.md`.
+
+The dashboard status panels and daily summary will populate immediately after seeding.

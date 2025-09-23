@@ -122,3 +122,9 @@ class NextActionSuggestion(BaseModel):
 class ProjectNextActions(BaseModel):
     project_id: UUID
     suggestions: list[NextActionSuggestion]
+
+
+class ProjectStatusSummary(BaseModel):
+    project_id: UUID
+    summary: str
+    generated_at: datetime

@@ -8,8 +8,8 @@ from sqlalchemy.orm import Session
 
 from app.db import get_session
 from app.models import Project
-from app.schemas import ProjectCreate, ProjectRead, ProjectStatusRead, ProjectNextActions
-from app.services import compute_project_status, select_next_actions
+from app.schemas import ProjectCreate, ProjectRead, ProjectStatusRead, ProjectNextActions, ProjectStatusSummary
+from app.services import compute_project_status, select_next_actions, generate_project_summary
 
 router = APIRouter(prefix="/v1/projects", tags=["projects"])
 
@@ -88,4 +88,18 @@ def get_project_next_actions(project_id: UUID, db: Session = Depends(get_session
             }
             for suggestion in suggestions
         ],
+    )
+
+
+@router.get("/{project_id}/status/summary", response_model=ProjectStatusSummary)
+def get_project_status_summary(project_id: UUID, db: Session = Depends(get_session)) -> ProjectStatusSummary:
+    project = db.get(Project, project_id)
+    if project is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+
+    summary = generate_project_summary(db, project)
+    return ProjectStatusSummary(
+        project_id=summary.project_id,
+        summary=summary.summary,
+        generated_at=summary.generated_at,
     )

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Iterable, List
 from uuid import UUID
 
@@ -32,6 +32,12 @@ class ProjectStatus:
     percent_complete: float
     status_breakdown: dict[str, int]
     milestone_summaries: List[MilestoneSummary]
+
+@dataclass
+class ProjectStatusSummary:
+    project_id: UUID
+    summary: str
+    generated_at: datetime
 
 
 @dataclass
@@ -124,7 +130,7 @@ def select_next_actions(session: Session, project: Project, limit: int = 3) -> l
         key=lambda task: (
             -float(task.priority_score or 0),
             task.status != "blocked",
-            datetime.max if task.created_at is None else task.created_at,
+            (datetime.max.replace(tzinfo=timezone.utc) if task.created_at is None else task.created_at),
         )
     )
 
@@ -154,3 +160,34 @@ def select_next_actions(session: Session, project: Project, limit: int = 3) -> l
         )
 
     return suggestions
+
+
+def generate_project_summary(session: Session, project: Project, limit: int = 3) -> ProjectStatusSummary:
+    status = compute_project_status(session, project)
+    suggestions = select_next_actions(session, project, limit=limit)
+
+    parts: list[str] = []
+    parts.append(f"{project.name}: {status.percent_complete:.1f}% complete")
+    if status.total_estimate > 0:
+        parts.append(f"{status.remaining_effort:.1f}h remaining of {status.total_estimate:.1f}h planned")
+    else:
+        parts.append("No effort estimates yet")
+
+    if status.status_breakdown:
+        breakdown = ", ".join(f"{count} {state}" for state, count in status.status_breakdown.items())
+        parts.append(f"Tasks: {breakdown}")
+    else:
+        parts.append("Tasks: none recorded")
+
+    if suggestions:
+        formatted = "; ".join(f"{s.title} ({s.status})" for s in suggestions)
+        parts.append(f"Next: {formatted}")
+    else:
+        parts.append("Next: no pending items")
+
+    summary = ". ".join(parts)
+    return ProjectStatusSummary(
+        project_id=project.id,
+        summary=summary,
+        generated_at=datetime.now(timezone.utc),
+    )
