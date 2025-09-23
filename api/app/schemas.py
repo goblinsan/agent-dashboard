@@ -128,3 +128,25 @@ class ProjectStatusSummary(BaseModel):
     project_id: UUID
     summary: str
     generated_at: datetime
+
+class PersonaBase(BaseModel):
+    key: str
+    name: str
+    description: Optional[str] = None
+    maximum_active_tasks: Optional[int] = None
+
+
+class PersonaRead(PersonaBase):
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ProjectPersonaRead(BaseModel):
+    project_id: UUID
+    persona_key: str
+    limit_per_agent: Optional[int] = None
+    persona: PersonaBase
+
+    model_config = {"from_attributes": True}

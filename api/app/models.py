@@ -23,6 +23,7 @@ class Project(Base):
     parent = relationship("Project", remote_side=[id], back_populates="children")
     children = relationship("Project", back_populates="parent", cascade="all, delete-orphan")
     milestones = relationship("Milestone", back_populates="project", cascade="all, delete-orphan")
+    personas = relationship("ProjectPersona", back_populates="project", cascade="all, delete-orphan")
 
 
 class Milestone(Base):
@@ -112,3 +113,29 @@ class Task(Base):
         CheckConstraint("effort_estimate >= 0", name="task_effort_estimate_non_negative"),
         CheckConstraint("effort_spent >= 0", name="task_effort_spent_non_negative"),
     )
+
+
+class Persona(Base):
+    __tablename__ = "personas"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    maximum_active_tasks: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    projects = relationship("ProjectPersona", back_populates="persona", cascade="all, delete-orphan")
+
+
+class ProjectPersona(Base):
+    __tablename__ = "project_personas"
+
+    project_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), primary_key=True)
+    persona_key: Mapped[str] = mapped_column(String(64), ForeignKey("personas.key", ondelete="CASCADE"), primary_key=True)
+    limit_per_agent: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    project = relationship("Project", back_populates="personas")
+    persona = relationship("Persona", back_populates="projects")

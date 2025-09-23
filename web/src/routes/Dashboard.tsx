@@ -6,6 +6,7 @@ import { useProjectNextActions } from "../hooks/useProjectNextActions";
 import { CreateProjectInput, useCreateProject, useProjects } from "../hooks/useProjects";
 import { useProjectStatus } from "../hooks/useProjectStatus";
 import { useProjectStatusSummary } from "../hooks/useProjectStatusSummary";
+import { useProjectPersonas } from "../hooks/usePersonas";
 import { CreateTaskInput, useCreateTask, useTasks } from "../hooks/useTasks";
 
 export default function DashboardRoute() {
@@ -17,6 +18,7 @@ export default function DashboardRoute() {
   const { data: tasks } = useTasks(selectedMilestone);
   const { data: statusSummary } = useProjectStatus(selectedProject);
   const { data: statusText } = useProjectStatusSummary(selectedProject);
+  const { data: projectPersonas } = useProjectPersonas(selectedProject);
   const { data: nextActions } = useProjectNextActions(selectedProject);
 
   const createProject = useCreateProject();
@@ -84,6 +86,34 @@ export default function DashboardRoute() {
           )}
         </section>
       </div>
+
+      {selectedProject && (
+        <section style={{ marginTop: "2rem" }}>
+          <h2 className="section-title">Personas & Limits</h2>
+          {projectPersonas && projectPersonas.length > 0 ? (
+            <ul className="list">
+              {projectPersonas.map((entry) => (
+                <li key={entry.persona_key}>
+                  <div className="card">
+                    <div className="item-title">{entry.persona.name}</div>
+                    {entry.persona.description && (
+                      <p className="text-subtle">{entry.persona.description}</p>
+                    )}
+                    <div className="text-subtle">
+                      Max active tasks: {entry.persona.maximum_active_tasks ?? "—"}
+                    </div>
+                    <div className="text-subtle">
+                      Limit per agent: {entry.limit_per_agent ?? "—"}
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="empty-state">No personas assigned to this project yet.</p>
+          )}
+        </section>
+      )}
 
       {selectedProject && (
         <section style={{ marginTop: "2rem" }}>
@@ -201,6 +231,7 @@ export default function DashboardRoute() {
   );
 }
 
+
 type ProjectFormProps = {
   onSubmit: (values: CreateProjectInput) => void;
   submitting: boolean;
@@ -246,6 +277,7 @@ function ProjectForm({ onSubmit, submitting }: ProjectFormProps) {
     </form>
   );
 }
+
 
 type MilestoneFormProps = {
   projectId: string;
@@ -294,6 +326,7 @@ function MilestoneForm({ projectId, onSubmit, submitting }: MilestoneFormProps) 
   );
 }
 
+
 type TaskFormProps = {
   milestoneId: string;
   onSubmit: (values: CreateTaskInput) => void;
@@ -340,6 +373,7 @@ function TaskForm({ milestoneId, onSubmit, submitting }: TaskFormProps) {
     </form>
   );
 }
+
 
 function ErrorMessage({ error }: { error: unknown }) {
   const message = error instanceof Error ? error.message : "Something went wrong";
