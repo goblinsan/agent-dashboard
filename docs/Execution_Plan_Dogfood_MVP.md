@@ -10,9 +10,9 @@ Reach a usable vertical slice that lets us plan this project **inside** the prod
   - [x] Endpoints: `.well-known/schemas`, `POST/GET /v1/projects`, `POST/GET /v1/milestones`, `POST/GET /v1/tasks`
   - [x] Optimistic locking on `PATCH /v1/tasks/:id`
 - **Phase B — Web UI skeleton (Day 2–3)**
-  - [ ] Dashboard list of projects
-  - [ ] Create project form (barebones)
-  - [ ] Task list under milestone; inline add task
+  - [x] Dashboard list of projects
+  - [x] Create project form (barebones)
+  - [x] Task list under milestone; inline add task
 - **Phase C — Roll-ups & NSA stubs (Day 3–4)**
   - [ ] `/v1/projects/:id/status` computed with remaining hours
   - [ ] `/v1/projects/:id/next-action` returns top 3 placeholders
@@ -30,4 +30,5 @@ Reach a usable vertical slice that lets us plan this project **inside** the prod
 
 ## Definition of Done
 - We can manage this execution plan entirely from the app: add tasks, mark progress, see remaining, and view Next Suggested Action.
+
 
