@@ -25,6 +25,7 @@ class Project(Base):
     milestones = relationship("Milestone", back_populates="project", cascade="all, delete-orphan")
     personas = relationship("ProjectPersona", back_populates="project", cascade="all, delete-orphan")
     bugs = relationship("Bug", back_populates="project", cascade="all, delete-orphan")
+    events = relationship("EventLog", back_populates="project", cascade="all, delete-orphan")
 
 
 class Milestone(Base):
@@ -47,6 +48,7 @@ class Milestone(Base):
     project = relationship("Project", back_populates="milestones")
     phases = relationship("Phase", back_populates="milestone", cascade="all, delete-orphan")
     tasks = relationship("Task", back_populates="milestone", cascade="all, delete-orphan")
+    events = relationship("EventLog", back_populates="milestone")
 
 
 class Phase(Base):
@@ -110,6 +112,7 @@ class Task(Base):
     parent = relationship("Task", remote_side=[id], back_populates="children")
     children = relationship("Task", back_populates="parent", cascade="all, delete-orphan")
     bugs = relationship("Bug", back_populates="task")
+    events = relationship("EventLog", back_populates="task")
 
     __table_args__ = (
         CheckConstraint("effort_estimate >= 0", name="task_effort_estimate_non_negative"),
@@ -157,3 +160,20 @@ class Bug(Base):
 
     project = relationship("Project", back_populates="bugs")
     task = relationship("Task", back_populates="bugs")
+
+
+class EventLog(Base):
+    __tablename__ = "event_logs"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    project_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    milestone_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("milestones.id", ondelete="SET NULL"), nullable=True)
+    task_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("tasks.id", ondelete="SET NULL"), nullable=True)
+    category: Mapped[str] = mapped_column(String(64), nullable=False, default="note")
+    summary: Mapped[str] = mapped_column(String(255), nullable=False)
+    details: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+
+    project = relationship("Project", back_populates="events")
+    milestone = relationship("Milestone", back_populates="events")
+    task = relationship("Task", back_populates="events")

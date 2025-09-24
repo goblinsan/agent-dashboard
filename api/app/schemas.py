@@ -178,3 +178,23 @@ class BugRead(BugBase):
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class EventLogBase(BaseModel):
+    project_id: UUID
+    milestone_id: Optional[UUID] = None
+    task_id: Optional[UUID] = None
+    category: str = "note"
+    summary: str
+    details: Optional[str] = None
+
+
+class EventLogCreate(EventLogBase):
+    pass
+
+
+class EventLogRead(EventLogBase):
+    id: UUID
+    created_at: datetime
+
+    model_config = {"from_attributes": True}

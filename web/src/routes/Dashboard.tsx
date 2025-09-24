@@ -9,9 +9,11 @@ import { useProjectStatusSummary } from "../hooks/useProjectStatusSummary";
 import { useProjectPersonas } from "../hooks/usePersonas";
 import { Bug, BugCreateInput, BugUpdateInput, useBugs, useCreateBug, useDeleteBug, useUpdateBug } from "../hooks/useBugs";
 import { CreateTaskInput, Task, useCreateTask, useProjectTasks, useTasks } from "../hooks/useTasks";
+import { CreateEventInput, EventLog, useCreateEvent, useEvents } from "../hooks/useEvents";
 
 const BUG_SEVERITIES = ["S1", "S2", "S3", "S4"];
 const BUG_STATUSES = ["open", "in_progress", "blocked", "resolved", "closed"];
+const EVENT_CATEGORIES = ["note", "update", "decision", "risk"];
 
 function formatTaskLabel(task: Task, milestoneLookup: Map<string, string>): string {
 
@@ -36,6 +38,7 @@ export default function DashboardRoute() {
   const { data: tasks } = useTasks(selectedMilestone);
   const { data: bugs, isLoading: bugsLoading, error: bugsError } = useBugs(selectedProject);
   const { data: projectTasks } = useProjectTasks(selectedProject);
+  const { data: events, isLoading: eventsLoading, error: eventsError } = useEvents(selectedProject);
 
   const { data: statusSummary } = useProjectStatus(selectedProject);
 
@@ -58,6 +61,7 @@ export default function DashboardRoute() {
   const updateBug = useUpdateBug(selectedProject);
 
   const deleteBug = useDeleteBug(selectedProject);
+  const createEvent = useCreateEvent(selectedProject);
 
 
 
@@ -78,6 +82,16 @@ export default function DashboardRoute() {
 
     return lookup;
   }, [milestones]);
+
+  const taskLookup = useMemo(() => {
+    const lookup = new Map<string, Task>();
+
+    projectTasks?.forEach((task) => {
+      lookup.set(task.id, task);
+    });
+
+    return lookup;
+  }, [projectTasks]);
 
 
 
@@ -455,6 +469,30 @@ export default function DashboardRoute() {
       )}
 
       {selectedProject && (
+        <section style={{ marginTop: "2rem" }}>
+          <h2 className="section-title">Activity Log</h2>
+
+          <EventForm
+            projectId={selectedProject!}
+            milestones={milestones ?? []}
+            milestoneLookup={milestoneLookup}
+            tasks={projectTasks ?? []}
+            onSubmit={(values) => createEvent.mutate(values)}
+            submitting={createEvent.isPending}
+          />
+
+          {eventsLoading && <p className="empty-state">Loading activity.</p>}
+          {eventsError && <ErrorMessage error={eventsError} />}
+
+          {events && events.length > 0 ? (
+            <EventList events={events} milestoneLookup={milestoneLookup} taskLookup={taskLookup} />
+          ) : (
+            !eventsLoading && <p className="empty-state">No activity logged yet.</p>
+          )}
+        </section>
+      )}
+
+      {selectedProject && (
 
         <section style={{ marginTop: "2rem" }}>
 
@@ -795,6 +833,352 @@ function TaskForm({ milestoneId, onSubmit, submitting }: TaskFormProps) {
   );
 
 }
+
+
+type EventFormProps = {
+
+  projectId: string;
+
+  milestones: { id: string; name: string }[];
+
+  milestoneLookup: Map<string, string>;
+
+  tasks: Task[];
+
+  onSubmit: (values: CreateEventInput) => void;
+
+  submitting: boolean;
+
+};
+
+
+
+type EventListProps = {
+
+  events: EventLog[];
+
+  milestoneLookup: Map<string, string>;
+
+  taskLookup: Map<string, Task>;
+
+};
+
+
+
+function EventForm({ projectId, milestones, milestoneLookup, tasks, onSubmit, submitting }: EventFormProps) {
+
+  const [summary, setSummary] = useState("");
+
+  const [details, setDetails] = useState("");
+
+  const [category, setCategory] = useState(EVENT_CATEGORIES[0]);
+
+  const [milestoneId, setMilestoneId] = useState("");
+
+  const [taskId, setTaskId] = useState("");
+
+
+
+  useEffect(() => {
+
+    setSummary("");
+
+    setDetails("");
+
+    setCategory(EVENT_CATEGORIES[0]);
+
+    setMilestoneId("");
+
+    setTaskId("");
+
+  }, [projectId]);
+
+
+
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+
+    event.preventDefault();
+
+    const trimmedSummary = summary.trim();
+
+    if (!trimmedSummary) {
+
+      return;
+
+    }
+
+    const payload: CreateEventInput = {
+
+      project_id: projectId,
+
+      summary: trimmedSummary,
+
+      category,
+
+    };
+
+    const trimmedDetails = details.trim();
+
+    if (trimmedDetails) {
+
+      payload.details = trimmedDetails;
+
+    }
+
+    if (milestoneId) {
+
+      payload.milestone_id = milestoneId;
+
+    }
+
+    if (taskId) {
+
+      payload.task_id = taskId;
+
+    }
+
+    onSubmit(payload);
+
+    setSummary("");
+
+    setDetails("");
+
+    setCategory(EVENT_CATEGORIES[0]);
+
+    setTaskId("");
+
+  };
+
+
+
+  const handleTaskChange = (value: string) => {
+
+    setTaskId(value);
+
+    if (!value) {
+
+      return;
+
+    }
+
+    const match = tasks.find((task) => task.id === value);
+
+    if (match) {
+
+      setMilestoneId(match.milestone_id ?? "");
+
+    }
+
+  };
+
+
+
+  return (
+
+    <form onSubmit={handleSubmit} className="card form" style={{ marginBottom: "1rem" }}>
+
+      <div className="form-field">
+
+        <label htmlFor="event-summary">Summary</label>
+
+        <input
+
+          id="event-summary"
+
+          type="text"
+
+          value={summary}
+
+          onChange={(event) => setSummary(event.target.value)}
+
+          className="input"
+
+          placeholder="Deployment completed successfully"
+
+        />
+
+      </div>
+
+      <div className="form-field">
+
+        <label htmlFor="event-details">Details</label>
+
+        <textarea
+
+          id="event-details"
+
+          value={details}
+
+          onChange={(event) => setDetails(event.target.value)}
+
+          className="textarea"
+
+          rows={3}
+
+          placeholder="Expanded notes for future reference"
+
+        />
+
+      </div>
+
+      <div className="form-field">
+
+        <label htmlFor="event-category">Category</label>
+
+        <select
+
+          id="event-category"
+
+          className="input"
+
+          value={category}
+
+          onChange={(event) => setCategory(event.target.value)}
+
+        >
+
+          {EVENT_CATEGORIES.map((value) => (
+
+            <option key={value} value={value}>
+
+              {value}
+
+            </option>
+
+          ))}
+
+        </select>
+
+      </div>
+
+      <div className="form-field">
+
+        <label htmlFor="event-milestone">Milestone</label>
+
+        <select
+
+          id="event-milestone"
+
+          className="input"
+
+          value={milestoneId}
+
+          onChange={(event) => setMilestoneId(event.target.value)}
+
+        >
+
+          <option value="">Not specified</option>
+
+          {milestones.map((milestone) => (
+
+            <option key={milestone.id} value={milestone.id}>
+
+              {milestone.name}
+
+            </option>
+
+          ))}
+
+        </select>
+
+      </div>
+
+      <div className="form-field">
+
+        <label htmlFor="event-task">Task</label>
+
+        <select
+
+          id="event-task"
+
+          className="input"
+
+          value={taskId}
+
+          onChange={(event) => handleTaskChange(event.target.value)}
+
+        >
+
+          <option value="">Not linked</option>
+
+          {tasks.map((task) => (
+
+            <option key={task.id} value={task.id}>
+
+              {formatTaskLabel(task, milestoneLookup)}
+
+            </option>
+
+          ))}
+
+        </select>
+
+        {tasks.length === 0 && <p className="text-subtle">Events can reference tasks, but it is optional.</p>}
+
+      </div>
+
+      <button type="submit" className="button button--primary" disabled={submitting}>
+
+        {submitting ? "Logging..." : "Log event"}
+
+      </button>
+
+    </form>
+
+  );
+
+}
+
+
+
+function EventList({ events, milestoneLookup, taskLookup }: EventListProps) {
+
+  return (
+
+    <ul className="list" style={{ marginTop: "1rem" }}>
+
+      {events.map((event) => {
+
+        const milestoneName = event.milestone_id ? milestoneLookup.get(event.milestone_id) : undefined;
+
+        const task = event.task_id ? taskLookup.get(event.task_id) : undefined;
+
+        return (
+
+          <li key={event.id}>
+
+            <div className="card">
+
+              <div className="item-title">{event.summary}</div>
+
+              <span className="status-tag">{event.category}</span>
+
+              <p className="text-subtle">Logged {new Date(event.created_at).toLocaleString()}</p>
+
+              {milestoneName && <p className="text-subtle">Milestone: {milestoneName}</p>}
+
+              {task && <p className="text-subtle">Task: {formatTaskLabel(task, milestoneLookup)}</p>}
+
+              {event.details && (
+
+                <p className="text-subtle" style={{ marginTop: "0.5rem" }}>{event.details}</p>
+
+              )}
+
+            </div>
+
+          </li>
+
+        );
+
+      })}
+
+    </ul>
+
+  );
+
+}
+
 
 
 type BugFormProps = {
