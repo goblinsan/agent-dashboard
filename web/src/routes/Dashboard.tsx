@@ -60,9 +60,13 @@ export default function DashboardRoute() {
 
   const [taskEdit, setTaskEdit] = useState<{ id: string; title: string; milestoneId: string; projectId?: string; lockVersion: number } | null>(null);
 
+  const [worklistPersona, setWorklistPersona] = useState<string>("");
+
+
   useEffect(() => {
     setMilestoneEdit(null);
     setTaskEdit(null);
+    setWorklistPersona("");
   }, [selectedProject]);
 
   useEffect(() => {
@@ -146,6 +150,36 @@ export default function DashboardRoute() {
       </svg>
     </button>
   );
+
+  const personaNameLookup = useMemo(() => {
+    const lookup = new Map<string, string>();
+    projectPersonas?.forEach((entry) => {
+      lookup.set(entry.persona_key, entry.persona.name);
+    });
+    return lookup;
+  }, [projectPersonas]);
+
+  const personaOptions = useMemo(() => {
+    const values = new Set<string>();
+    projectTasks?.forEach((task) => {
+      if (task.persona_required) {
+        values.add(task.persona_required);
+      }
+    });
+    return Array.from(values).sort();
+  }, [projectTasks]);
+
+  const filteredWorklist = useMemo(() => {
+    if (!projectTasks) {
+      return [];
+    }
+    return projectTasks.filter((task) => {
+      if (selectedMilestone && task.milestone_id !== selectedMilestone) {
+        return false;
+      }
+      return !worklistPersona || task.persona_required === worklistPersona;
+    });
+  }, [projectTasks, selectedMilestone, worklistPersona]);
 
   const taskLookup = useMemo(() => {
 
@@ -251,30 +285,30 @@ export default function DashboardRoute() {
                       </div>
                     </form>
                   ) : (
-                    <button
-                      type="button"
+                    <div
+                      className={`card card--selectable ${selectedProject === project.id ? "card--active" : ""}`}
+                      role="button"
+                      tabIndex={0}
                       onClick={() => {
                         setSelectedProject(project.id);
                         setSelectedMilestone(undefined);
                       }}
-                      className={`card card--selectable ${selectedProject === project.id ? "card--active" : ""}`}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          setSelectedProject(project.id);
+                          setSelectedMilestone(undefined);
+                        }
+                      }}
                     >
-                      <span
-                        className="edit-icon"
-                        role="button"
-                        tabIndex={0}
+                      <button
+                        type="button"
+                        className="icon-button"
                         aria-label={`Edit ${project.name}`}
                         onClick={(event) => {
                           event.preventDefault();
                           event.stopPropagation();
                           setProjectEdit({ id: project.id, name: project.name });
-                        }}
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter" || event.key === " ") {
-                            event.preventDefault();
-                            event.stopPropagation();
-                            setProjectEdit({ id: project.id, name: project.name });
-                          }
                         }}
                       >
                         <svg aria-hidden="true" focusable="false" width="14" height="14" viewBox="0 0 20 20">
@@ -283,11 +317,11 @@ export default function DashboardRoute() {
                             fill="currentColor"
                           />
                         </svg>
-                      </span>
+                      </button>
                       <div className="item-title">{project.name}</div>
                       {renderCopyButton(project.id)}
                       {project.goal && <div className="text-subtle">{project.goal}</div>}
-                    </button>
+                    </div>
                   )}
                 </li>
               );
@@ -355,30 +389,27 @@ export default function DashboardRoute() {
                           </div>
                         </form>
                       ) : (
-                        <button
-                          type="button"
-                          onClick={() => setSelectedMilestone(milestone.id)}
+                        <div
                           className={`card card--selectable ${selectedMilestone === milestone.id ? "card--active" : ""}`}
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => setSelectedMilestone(milestone.id)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              setSelectedMilestone(milestone.id);
+                            }
+                          }}
                         >
-                          <span
-                            className="edit-icon"
-                            role="button"
-                            tabIndex={0}
+                          <button
+                            type="button"
+                            className="icon-button"
                             aria-label={`Edit ${milestone.name}`}
                             onClick={(event) => {
                               event.preventDefault();
                               event.stopPropagation();
                               if (selectedProject) {
                                 setMilestoneEdit({ id: milestone.id, name: milestone.name, projectId: selectedProject });
-                              }
-                            }}
-                            onKeyDown={(event) => {
-                              if (event.key === "Enter" || event.key === " ") {
-                                event.preventDefault();
-                                event.stopPropagation();
-                                if (selectedProject) {
-                                  setMilestoneEdit({ id: milestone.id, name: milestone.name, projectId: selectedProject });
-                                }
                               }
                             }}
                           >
@@ -388,11 +419,11 @@ export default function DashboardRoute() {
                                 fill="currentColor"
                               />
                             </svg>
-                          </span>
+                          </button>
                           <div className="item-title">{milestone.name}</div>
                           {renderCopyButton(milestone.id)}
                           {milestone.description && <div className="text-subtle">{milestone.description}</div>}
-                        </button>
+                        </div>
                       )}
                     </li>
                   );
@@ -645,20 +676,33 @@ export default function DashboardRoute() {
                         </div>
                       </form>
                     ) : (
-                      <div className="card">
+                      <div
+                        className="card"
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => setSelectedMilestone(task.milestone_id)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            setSelectedMilestone(task.milestone_id);
+                          }
+                        }}
+                      >
                         <button
                           type="button"
                           className="icon-button"
                           aria-label={`Edit ${task.title}`}
-                          onClick={() =>
+                          onClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
                             setTaskEdit({
                               id: task.id,
                               title: task.title,
                               milestoneId: task.milestone_id,
                               projectId: selectedProject,
                               lockVersion: task.lock_version,
-                            })
-                          }
+                            });
+                          }}
                         >
                           <svg aria-hidden="true" focusable="false" width="14" height="14" viewBox="0 0 20 20">
                             <path
@@ -743,6 +787,54 @@ export default function DashboardRoute() {
           ) : (
             !eventsLoading && <p className="empty-state">No activity logged yet.</p>
           )}
+        </section>
+      )}
+
+      {selectedProject && (
+        <section style={{ marginTop: "2rem" }}>
+          <h2 className="section-title">Persona Worklist</h2>
+          <div className="card">
+            <div className="form-field" style={{ maxWidth: "240px" }}>
+              <label htmlFor="worklist-persona">Persona</label>
+              <select
+                id="worklist-persona"
+                className="input"
+                value={worklistPersona}
+                onChange={(event) => setWorklistPersona(event.target.value)}
+              >
+                <option value="">All personas</option>
+                {personaOptions.map((value) => (
+                  <option key={value} value={value}>
+                    {personaNameLookup.get(value) ?? value}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {filteredWorklist.length > 0 ? (
+              <ul className="list" style={{ marginTop: "1rem" }}>
+                {filteredWorklist.map((task) => {
+                  const milestoneName = milestoneLookup.get(task.milestone_id);
+                  const personaKey = task.persona_required;
+                  const personaLabel = personaKey ? personaNameLookup.get(personaKey) ?? personaKey : "Unassigned";
+                  return (
+                    <li key={`worklist-${task.id}`}>
+                      <div className="card">
+                        {renderCopyButton(task.id)}
+                        <div className="item-title">{task.title}</div>
+                        {milestoneName && <div className="text-subtle">Milestone: {milestoneName}</div>}
+                        <div className="text-subtle">Status: {task.status}</div>
+                        <div className="text-subtle">Persona: {personaLabel}</div>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <p className="empty-state" style={{ marginTop: "1rem" }}>
+                {worklistPersona ? "No tasks awaiting this persona." : "No project tasks yet."}
+              </p>
+            )}
+          </div>
         </section>
       )}
 
@@ -1785,7 +1877,8 @@ function BugList({ bugs, tasks, milestoneLookup, onUpdate, onDelete, updating, d
                   type="button"
                   className="icon-button"
                   aria-label={`Edit ${bug.title}`}
-                  onClick={() => {
+                  onClick={(event) => {
+                    event.preventDefault();
                     setEditingBugId(bug.id);
                     setEditingTitle(bug.title);
                   }}

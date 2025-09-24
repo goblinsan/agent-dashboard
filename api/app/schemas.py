@@ -166,6 +166,15 @@ class ProjectPersonaRead(BaseModel):
 
     model_config = {"from_attributes": True}
 
+
+class ProjectPersonaAssignment(BaseModel):
+    persona_key: str
+    limit_per_agent: Optional[int] = None
+
+
+class ProjectPersonaUpdatePayload(BaseModel):
+    personas: list[ProjectPersonaAssignment]
+
 class BugBase(BaseModel):
     project_id: UUID
     task_id: Optional[UUID] = None

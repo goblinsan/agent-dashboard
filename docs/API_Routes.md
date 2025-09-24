@@ -101,6 +101,7 @@ curl -s -X POST http://localhost:8080/v1/events \
 | --- | --- | --- |
 | `GET` | `/v1/personas` | List persona definitions (key, name, description, limits). |
 | `GET` | `/v1/personas/projects/{project_id}` | Personas assigned to a project plus per-agent limits. |
+| `PUT` | `/v1/personas/projects/{project_id}` | Replace personas assigned to the project (body: `{ "personas": [{"persona_key": "LeadEngineer", "limit_per_agent": 2}, ...] }`). |
 
 ---
 

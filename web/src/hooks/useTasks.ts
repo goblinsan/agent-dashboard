@@ -9,6 +9,7 @@ export type Task = {
   description?: string;
   status: string;
   lock_version: number;
+  persona_required?: string | null;
 };
 
 export type CreateTaskInput = {
