@@ -244,7 +244,7 @@ export default function DashboardRoute() {
 
           <ProjectForm onSubmit={(values) => createProject.mutate(values)} submitting={createProject.isPending} />
 
-          {projectsLoading && <p className="empty-state">Loading projects…</p>}
+          {projectsLoading && <p className="empty-state">Loading projects...</p>}
 
           {projectsError && <ErrorMessage error={projectsError} />}
 
@@ -471,13 +471,13 @@ export default function DashboardRoute() {
 
                     <div className="text-subtle">
 
-                      Max active tasks: {entry.persona.maximum_active_tasks ?? "—"}
+                      Max active tasks: {entry.persona.maximum_active_tasks ?? "unset"}
 
                     </div>
 
                     <div className="text-subtle">
 
-                      Limit per agent: {entry.limit_per_agent ?? "—"}
+                      Limit per agent: {entry.limit_per_agent ?? "unset"}
 
                     </div>
 
@@ -593,7 +593,7 @@ export default function DashboardRoute() {
 
                       <li key={milestone.milestone_id} className="text-subtle">
 
-                        <strong>{milestone.name}</strong>: {milestone.percent_complete.toFixed(1)}% • Remaining {" "}
+                        <strong>{milestone.name}</strong>: {milestone.percent_complete.toFixed(1)}%  Remaining {" "}
 
                         {milestone.remaining_effort.toFixed(1)}h
 
@@ -978,7 +978,7 @@ function ProjectForm({ onSubmit, submitting }: ProjectFormProps) {
 
       <button type="submit" className="button button--primary" disabled={submitting}>
 
-        {submitting ? "Creating…" : "Create project"}
+        {submitting ? "Creating..." : "Create project"}
 
       </button>
 
@@ -1074,7 +1074,7 @@ function MilestoneForm({ projectId, onSubmit, submitting }: MilestoneFormProps) 
 
       <button type="submit" className="button button--primary" disabled={submitting}>
 
-        {submitting ? "Creating…" : "Create milestone"}
+        {submitting ? "Creating..." : "Create milestone"}
 
       </button>
 
@@ -1170,7 +1170,7 @@ function TaskForm({ milestoneId, onSubmit, submitting }: TaskFormProps) {
 
       <button type="submit" className="button button--primary" disabled={submitting}>
 
-        {submitting ? "Adding…" : "Add task"}
+        {submitting ? "Addingï¿½" : "Add task"}
 
       </button>
 
