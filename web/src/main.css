@@ -283,6 +283,37 @@ a:hover {
   flex-wrap: wrap;
 }
 
+.copy-badge {
+  position: absolute;
+  bottom: 0.6rem;
+  right: 0.6rem;
+  border: none;
+  border-radius: 9999px;
+  background: rgba(226, 232, 240, 0.9);
+  color: #0f172a;
+  padding: 0.2rem 0.6rem;
+  font-size: 0.75rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  cursor: pointer;
+  text-transform: none;
+}
+
+.copy-badge:hover,
+.copy-badge:focus-visible {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.copy-badge svg {
+  display: block;
+}
+
+.copy-badge__text {
+  font-weight: 600;
+}
+
 .error {
   border: 1px solid #fecdd3;
   background: #fee2e2;

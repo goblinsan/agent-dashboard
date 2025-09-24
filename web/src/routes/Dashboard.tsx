@@ -23,6 +23,29 @@ function formatTaskLabel(task: Task, milestoneLookup: Map<string, string>): stri
 
 }
 
+function abbreviateId(id: string): string {
+  return id.length <= 8 ? id : `${id.slice(0, 8)}...`;
+}
+
+async function copyIdToClipboard(id: string) {
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(id);
+    } else {
+      const textarea = document.createElement("textarea");
+      textarea.value = id;
+      textarea.style.position = "fixed";
+      textarea.style.opacity = "0";
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand("copy");
+      document.body.removeChild(textarea);
+    }
+  } catch (error) {
+    console.error("Failed to copy id", error);
+  }
+}
+
 export default function DashboardRoute() {
 
   const [selectedProject, setSelectedProject] = useState<string | undefined>();
@@ -104,7 +127,28 @@ export default function DashboardRoute() {
     return lookup;
   }, [milestones]);
 
+  const renderCopyButton = (id: string) => (
+    <button
+      type="button"
+      className="copy-badge"
+      onClick={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        copyIdToClipboard(id);
+      }}
+    >
+      <span className="copy-badge__text">copy id: {abbreviateId(id)}</span>
+      <svg aria-hidden="true" focusable="false" width="12" height="12" viewBox="0 0 20 20">
+        <path
+          d="M6 3a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-1v-2h1V3H8v1H6V3Zm-3 4a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Zm2 0v9h7V7H5Z"
+          fill="currentColor"
+        />
+      </svg>
+    </button>
+  );
+
   const taskLookup = useMemo(() => {
+
     const lookup = new Map<string, Task>();
 
     projectTasks?.forEach((task) => {
@@ -241,6 +285,7 @@ export default function DashboardRoute() {
                         </svg>
                       </span>
                       <div className="item-title">{project.name}</div>
+                      {renderCopyButton(project.id)}
                       {project.goal && <div className="text-subtle">{project.goal}</div>}
                     </button>
                   )}
@@ -345,6 +390,7 @@ export default function DashboardRoute() {
                             </svg>
                           </span>
                           <div className="item-title">{milestone.name}</div>
+                          {renderCopyButton(milestone.id)}
                           {milestone.description && <div className="text-subtle">{milestone.description}</div>}
                         </button>
                       )}
@@ -622,6 +668,7 @@ export default function DashboardRoute() {
                           </svg>
                         </button>
                         <div className="item-title">{task.title}</div>
+                        {renderCopyButton(task.id)}
                         {task.description && <div className="text-subtle">{task.description}</div>}
                         <span className="status-tag">Status: {task.status}</span>
                       </div>
@@ -1751,6 +1798,7 @@ function BugList({ bugs, tasks, milestoneLookup, onUpdate, onDelete, updating, d
                   </svg>
                 </button>
                 <div className="item-title">{bug.title}</div>
+                {renderCopyButton(bug.id)}
                 {bug.description && <p className="text-subtle">{bug.description}</p>}
                 <p className="text-subtle">Reported {new Date(bug.created_at).toLocaleString()}</p>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "1rem", marginTop: "0.75rem" }}>
