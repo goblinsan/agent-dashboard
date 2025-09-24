@@ -10,11 +10,27 @@ from app.db import get_session
 from app.models import Persona, Project, ProjectPersona
 from app.schemas import (
     PersonaRead,
+    PersonaBase,
     ProjectPersonaRead,
     ProjectPersonaUpdatePayload,
 )
 
 router = APIRouter(prefix="/v1/personas", tags=["personas"])
+
+@router.post("", response_model=PersonaRead, status_code=status.HTTP_201_CREATED)
+def create_persona(payload: PersonaBase, db: Session = Depends(get_session)) -> PersonaRead:
+    if db.get(Persona, payload.key) is not None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Persona '{payload.key}' already exists")
+    persona = Persona(
+        key=payload.key,
+        name=payload.name,
+        description=payload.description,
+        maximum_active_tasks=payload.maximum_active_tasks,
+    )
+    db.add(persona)
+    db.commit()
+    db.refresh(persona)
+    return PersonaRead.model_validate(persona)
 
 
 @router.get("", response_model=List[PersonaRead])

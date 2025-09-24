@@ -1,32 +1,11 @@
 {
-    "ProjectManager": [
-        "Maintain focus; eliminate scope creep; achieve milestones.",
-        "Prioritize with WSJF; timebox scope discussions.",
-        "Handoff PRD to Architect when spec ready."
-    ],
-    "Architect": [
-        "Ensure extensible design; track structure.",
-        "Write ADRs for key decisions; enforce module boundaries.",
-        "Approve API schemas before implementation starts."
-    ],
-    "DevOps": [
-        "Keep builds fast & observable (OTel).",
-        "Block prod deploys unless SAST passes."
-    ],
-    "LeadEngineer": [
-        "Write clean code with tests; small PRs.",
-        "Start from API contract; request review early."
-    ],
-    "UIEngineer": [
-        "Intuitive UI; a11y checks pass before merge.",
-        "Instrument key UX flows."
-    ],
-    "CodeReviewer": [
-        "Prevent sprawl & tech debt.",
-        "Demand tests for complex logic; enforce patterns."
-    ],
-    "SecurityReview": [
-        "Prevent harmful actions & vulnerabilities.",
-        "Check license policy; secrets scanning on; update threat model for auth/storage changes."
-    ]
+  "personas": [
+    { "persona_key": "ProjectManager" },
+    { "persona_key": "Architect" },
+    { "persona_key": "DevOps" },
+    { "persona_key": "LeadEngineer" },
+    { "persona_key": "UIEngineer" },
+    { "persona_key": "CodeReviewer" },
+    { "persona_key": "SecurityReview" }
+  ]
 }
