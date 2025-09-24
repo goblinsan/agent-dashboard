@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.db import get_session
 from app.models import Milestone, Project
-from app.schemas import MilestoneCreate, MilestoneRead
+from app.schemas import MilestoneCreate, MilestoneRead, MilestoneUpdate
 
 router = APIRouter(prefix="/v1/milestones", tags=["milestones"])
 
@@ -40,4 +40,19 @@ def get_milestone(milestone_id: UUID, db: Session = Depends(get_session)) -> Mil
     milestone = db.get(Milestone, milestone_id)
     if milestone is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Milestone not found")
+    return MilestoneRead.model_validate(milestone)
+
+
+@router.patch("/{milestone_id}", response_model=MilestoneRead)
+def update_milestone(milestone_id: UUID, payload: MilestoneUpdate, db: Session = Depends(get_session)) -> MilestoneRead:
+    milestone = db.get(Milestone, milestone_id)
+    if milestone is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Milestone not found")
+
+    update_data = payload.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(milestone, field, value)
+
+    db.commit()
+    db.refresh(milestone)
     return MilestoneRead.model_validate(milestone)

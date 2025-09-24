@@ -1,14 +1,14 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
 import Layout from "../components/Layout";
-import { CreateMilestoneInput, useCreateMilestone, useMilestones } from "../hooks/useMilestones";
+import { CreateMilestoneInput, useCreateMilestone, useMilestones, useUpdateMilestone } from "../hooks/useMilestones";
 import { useProjectNextActions } from "../hooks/useProjectNextActions";
-import { CreateProjectInput, useCreateProject, useProjects } from "../hooks/useProjects";
+import { CreateProjectInput, useCreateProject, useProjects, useUpdateProject } from "../hooks/useProjects";
 import { useProjectStatus } from "../hooks/useProjectStatus";
 import { useProjectStatusSummary } from "../hooks/useProjectStatusSummary";
 import { useProjectPersonas } from "../hooks/usePersonas";
 import { Bug, BugCreateInput, BugUpdateInput, useBugs, useCreateBug, useDeleteBug, useUpdateBug } from "../hooks/useBugs";
-import { CreateTaskInput, Task, useCreateTask, useProjectTasks, useTasks } from "../hooks/useTasks";
+import { CreateTaskInput, Task, useCreateTask, useProjectTasks, useTasks, useUpdateTask } from "../hooks/useTasks";
 import { CreateEventInput, EventLog, useCreateEvent, useEvents } from "../hooks/useEvents";
 
 const BUG_SEVERITIES = ["S1", "S2", "S3", "S4"];
@@ -30,6 +30,21 @@ export default function DashboardRoute() {
   const [selectedMilestone, setSelectedMilestone] = useState<string | undefined>();
 
 
+
+  const [projectEdit, setProjectEdit] = useState<{ id: string; name: string } | null>(null);
+
+  const [milestoneEdit, setMilestoneEdit] = useState<{ id: string; name: string; projectId: string } | null>(null);
+
+  const [taskEdit, setTaskEdit] = useState<{ id: string; title: string; milestoneId: string; projectId?: string; lockVersion: number } | null>(null);
+
+  useEffect(() => {
+    setMilestoneEdit(null);
+    setTaskEdit(null);
+  }, [selectedProject]);
+
+  useEffect(() => {
+    setTaskEdit(null);
+  }, [selectedMilestone]);
 
   const { data: projects, isLoading: projectsLoading, error: projectsError } = useProjects();
 
@@ -54,7 +69,13 @@ export default function DashboardRoute() {
 
   const createMilestone = useCreateMilestone();
 
-  const createTask = useCreateTask();
+  const createTask = useCreateTask(selectedProject);
+
+  const updateProject = useUpdateProject();
+
+  const updateMilestone = useUpdateMilestone();
+
+  const updateTask = useUpdateTask();
 
   const createBug = useCreateBug(selectedProject);
 
@@ -93,6 +114,44 @@ export default function DashboardRoute() {
     return lookup;
   }, [projectTasks]);
 
+  const handleProjectEditSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!projectEdit || !projectEdit.name.trim()) {
+      return;
+    }
+    updateProject.mutate(
+      { id: projectEdit.id, name: projectEdit.name.trim() },
+      { onSuccess: () => setProjectEdit(null) },
+    );
+  };
+
+  const handleMilestoneEditSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!milestoneEdit || !milestoneEdit.name.trim()) {
+      return;
+    }
+    updateMilestone.mutate(
+      { id: milestoneEdit.id, project_id: milestoneEdit.projectId, name: milestoneEdit.name.trim() },
+      { onSuccess: () => setMilestoneEdit(null) },
+    );
+  };
+
+  const handleTaskEditSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!taskEdit || !taskEdit.title.trim()) {
+      return;
+    }
+    updateTask.mutate(
+      {
+        id: taskEdit.id,
+        milestone_id: taskEdit.milestoneId,
+        project_id: taskEdit.projectId,
+        lock_version: taskEdit.lockVersion,
+        title: taskEdit.title.trim(),
+      },
+      { onSuccess: () => setTaskEdit(null) },
+    );
+  };
 
 
   return (
@@ -113,37 +172,84 @@ export default function DashboardRoute() {
 
           <ul className="list">
 
-            {projects?.map((project) => (
-
-              <li key={project.id}>
-
-                <button
-
-                  type="button"
-
-                  onClick={() => {
-
-                    setSelectedProject(project.id);
-
-                    setSelectedMilestone(undefined);
-
-                  }}
-
-                  className={`card card--selectable ${selectedProject === project.id ? "card--active" : ""}`}
-
-                >
-
-                  <div className="item-title">{project.name}</div>
-
-                  {project.goal && <div className="text-subtle">{project.goal}</div>}
-
-                </button>
-
-              </li>
-
-            ))}
+            {projects?.map((project) => {
+              const isEditing = projectEdit?.id === project.id;
+              return (
+                <li key={project.id}>
+                  {isEditing ? (
+                    <form onSubmit={handleProjectEditSubmit} className="card inline-edit-form">
+                      <input
+                        type="text"
+                        value={projectEdit?.name ?? ""}
+                        onChange={(event) =>
+                          setProjectEdit((prev) => (prev ? { ...prev, name: event.target.value } : prev))
+                        }
+                        className="input"
+                        placeholder="Project name"
+                        autoFocus
+                      />
+                      <div className="inline-edit-actions">
+                        <button
+                          type="submit"
+                          className="button button--primary"
+                          disabled={updateProject.isPending || !projectEdit?.name.trim()}
+                        >
+                          {updateProject.isPending ? "Saving..." : "Save"}
+                        </button>
+                        <button
+                          type="button"
+                          className="button button--secondary"
+                          onClick={() => setProjectEdit(null)}
+                          disabled={updateProject.isPending}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </form>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedProject(project.id);
+                        setSelectedMilestone(undefined);
+                      }}
+                      className={`card card--selectable ${selectedProject === project.id ? "card--active" : ""}`}
+                    >
+                      <span
+                        className="edit-icon"
+                        role="button"
+                        tabIndex={0}
+                        aria-label={`Edit ${project.name}`}
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          setProjectEdit({ id: project.id, name: project.name });
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            setProjectEdit({ id: project.id, name: project.name });
+                          }
+                        }}
+                      >
+                        <svg aria-hidden="true" focusable="false" width="14" height="14" viewBox="0 0 20 20">
+                          <path
+                            d="M4 13.5V16h2.5l7.4-7.4-2.5-2.5L4 13.5zm11.7-7.3a.7.7 0 0 0 0-1L13.8 3.3a.7.7 0 0 0-1 0l-1.2 1.2 2.5 2.5 1.1-1.2z"
+                            fill="currentColor"
+                          />
+                        </svg>
+                      </span>
+                      <div className="item-title">{project.name}</div>
+                      {project.goal && <div className="text-subtle">{project.goal}</div>}
+                    </button>
+                  )}
+                </li>
+              );
+            })}
 
           </ul>
+
 
         </section>
 
@@ -169,29 +275,82 @@ export default function DashboardRoute() {
 
               <ul className="list">
 
-                {milestones?.map((milestone) => (
-
-                  <li key={milestone.id}>
-
-                    <button
-
-                      type="button"
-
-                      onClick={() => setSelectedMilestone(milestone.id)}
-
-                      className={`card card--selectable ${selectedMilestone === milestone.id ? "card--active" : ""}`}
-
-                    >
-
-                      <div className="item-title">{milestone.name}</div>
-
-                      {milestone.description && <div className="text-subtle">{milestone.description}</div>}
-
-                    </button>
-
-                  </li>
-
-                ))}
+                {milestones?.map((milestone) => {
+                  const isEditing = milestoneEdit?.id === milestone.id;
+                  return (
+                    <li key={milestone.id}>
+                      {isEditing ? (
+                        <form onSubmit={handleMilestoneEditSubmit} className="card inline-edit-form">
+                          <input
+                            type="text"
+                            value={milestoneEdit?.name ?? ""}
+                            onChange={(event) =>
+                              setMilestoneEdit((prev) => (prev ? { ...prev, name: event.target.value } : prev))
+                            }
+                            className="input"
+                            placeholder="Milestone name"
+                            autoFocus
+                          />
+                          <div className="inline-edit-actions">
+                            <button
+                              type="submit"
+                              className="button button--primary"
+                              disabled={updateMilestone.isPending || !milestoneEdit?.name.trim()}
+                            >
+                              {updateMilestone.isPending ? "Saving..." : "Save"}
+                            </button>
+                            <button
+                              type="button"
+                              className="button button--secondary"
+                              onClick={() => setMilestoneEdit(null)}
+                              disabled={updateMilestone.isPending}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </form>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedMilestone(milestone.id)}
+                          className={`card card--selectable ${selectedMilestone === milestone.id ? "card--active" : ""}`}
+                        >
+                          <span
+                            className="edit-icon"
+                            role="button"
+                            tabIndex={0}
+                            aria-label={`Edit ${milestone.name}`}
+                            onClick={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              if (selectedProject) {
+                                setMilestoneEdit({ id: milestone.id, name: milestone.name, projectId: selectedProject });
+                              }
+                            }}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter" || event.key === " ") {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                if (selectedProject) {
+                                  setMilestoneEdit({ id: milestone.id, name: milestone.name, projectId: selectedProject });
+                                }
+                              }
+                            }}
+                          >
+                            <svg aria-hidden="true" focusable="false" width="14" height="14" viewBox="0 0 20 20">
+                              <path
+                                d="M4 13.5V16h2.5l7.4-7.4-2.5-2.5L4 13.5zm11.7-7.3a.7.7 0 0 0 0-1L13.8 3.3a.7.7 0 0 0-1 0l-1.2 1.2 2.5 2.5 1.1-1.2z"
+                                fill="currentColor"
+                              />
+                            </svg>
+                          </span>
+                          <div className="item-title">{milestone.name}</div>
+                          {milestone.description && <div className="text-subtle">{milestone.description}</div>}
+                        </button>
+                      )}
+                    </li>
+                  );
+                })}
 
               </ul>
 
@@ -405,23 +564,71 @@ export default function DashboardRoute() {
 
             <ul className="list" style={{ marginTop: "1rem" }}>
 
-              {tasks?.map((task) => (
-
-                <li key={task.id}>
-
-                  <div className="card">
-
-                    <div className="item-title">{task.title}</div>
-
-                    {task.description && <div className="text-subtle">{task.description}</div>}
-
-                    <span className="status-tag">Status: {task.status}</span>
-
-                  </div>
-
-                </li>
-
-              ))}
+              {tasks?.map((task) => {
+                const isEditing = taskEdit?.id === task.id;
+                return (
+                  <li key={task.id}>
+                    {isEditing ? (
+                      <form onSubmit={handleTaskEditSubmit} className="card inline-edit-form">
+                        <input
+                          type="text"
+                          value={taskEdit?.title ?? ""}
+                          onChange={(event) =>
+                            setTaskEdit((prev) => (prev ? { ...prev, title: event.target.value } : prev))
+                          }
+                          className="input"
+                          placeholder="Task title"
+                          autoFocus
+                        />
+                        <div className="inline-edit-actions">
+                          <button
+                            type="submit"
+                            className="button button--primary"
+                            disabled={updateTask.isPending || !taskEdit?.title.trim()}
+                          >
+                            {updateTask.isPending ? "Saving..." : "Save"}
+                          </button>
+                          <button
+                            type="button"
+                            className="button button--secondary"
+                            onClick={() => setTaskEdit(null)}
+                            disabled={updateTask.isPending}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </form>
+                    ) : (
+                      <div className="card">
+                        <button
+                          type="button"
+                          className="icon-button"
+                          aria-label={`Edit ${task.title}`}
+                          onClick={() =>
+                            setTaskEdit({
+                              id: task.id,
+                              title: task.title,
+                              milestoneId: task.milestone_id,
+                              projectId: selectedProject,
+                              lockVersion: task.lock_version,
+                            })
+                          }
+                        >
+                          <svg aria-hidden="true" focusable="false" width="14" height="14" viewBox="0 0 20 20">
+                            <path
+                              d="M4 13.5V16h2.5l7.4-7.4-2.5-2.5L4 13.5zm11.7-7.3a.7.7 0 0 0 0-1L13.8 3.3a.7.7 0 0 0-1 0l-1.2 1.2 2.5 2.5 1.1-1.2z"
+                              fill="currentColor"
+                            />
+                          </svg>
+                        </button>
+                        <div className="item-title">{task.title}</div>
+                        {task.description && <div className="text-subtle">{task.description}</div>}
+                        <span className="status-tag">Status: {task.status}</span>
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
 
               {!tasks?.length && <p className="empty-state">No tasks yet for this milestone.</p>}
 
@@ -1411,7 +1618,7 @@ type BugListProps = {
 
   milestoneLookup: Map<string, string>;
 
-  onUpdate: (input: BugUpdateInput) => void;
+  onUpdate: (input: BugUpdateInput, options?: { onSuccess?: () => void }) => void;
 
   onDelete: (bugId: string) => void;
 
@@ -1424,6 +1631,10 @@ type BugListProps = {
 
 
 function BugList({ bugs, tasks, milestoneLookup, onUpdate, onDelete, updating, deleting }: BugListProps) {
+
+  const [editingBugId, setEditingBugId] = useState<string | null>(null);
+
+  const [editingTitle, setEditingTitle] = useState<string>("");
 
   const taskOptions = tasks.map((task) => ({
 
@@ -1469,193 +1680,170 @@ function BugList({ bugs, tasks, milestoneLookup, onUpdate, onDelete, updating, d
 
     <ul className="list" style={{ marginTop: "1rem" }}>
 
-      {bugs.map((bug) => (
-
-        <li key={bug.id}>
-
-          <div className="card">
-
-            <div className="item-title">{bug.title}</div>
-
-            {bug.description && <p className="text-subtle">{bug.description}</p>}
-
-            <p className="text-subtle">Reported {new Date(bug.created_at).toLocaleString()}</p>
-
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "1rem", marginTop: "0.75rem" }}>
-
-              <div className="form-field" style={{ minWidth: "160px", marginBottom: 0 }}>
-
-                <label htmlFor={`bug-${bug.id}-status`}>Status</label>
-
-                <select
-
-                  id={`bug-${bug.id}-status`}
-
-                  className="input"
-
-                  value={bug.status}
-
-                  disabled={updating}
-
-                  onChange={(event) => {
-
-                    const nextStatus = event.target.value;
-
-                    if (nextStatus === bug.status) {
-
-                      return;
-
-                    }
-
-                    onUpdate({ id: bug.id, status: nextStatus });
-
-                  }}
-
-                >
-
-                  {BUG_STATUSES.map((status) => (
-
-                    <option key={status} value={status}>
-
-                      {formatStatusLabel(status)}
-
-                    </option>
-
-                  ))}
-
-                </select>
-
-              </div>
-
-              <div className="form-field" style={{ minWidth: "160px", marginBottom: 0 }}>
-
-                <label htmlFor={`bug-${bug.id}-severity`}>Severity</label>
-
-                <select
-
-                  id={`bug-${bug.id}-severity`}
-
-                  className="input"
-
-                  value={bug.severity}
-
-                  disabled={updating}
-
-                  onChange={(event) => {
-
-                    const nextSeverity = event.target.value;
-
-                    if (nextSeverity === bug.severity) {
-
-                      return;
-
-                    }
-
-                    onUpdate({ id: bug.id, severity: nextSeverity });
-
-                  }}
-
-                >
-
-                  {BUG_SEVERITIES.map((level) => (
-
-                    <option key={level} value={level}>
-
-                      {level}
-
-                    </option>
-
-                  ))}
-
-                </select>
-
-              </div>
-
-              <div className="form-field" style={{ minWidth: "220px", marginBottom: 0 }}>
-
-                <label htmlFor={`bug-${bug.id}-task`}>Linked task</label>
-
-                <select
-
-                  id={`bug-${bug.id}-task`}
-
-                  className="input"
-
-                  value={bug.task_id ?? ""}
-
-                  disabled={updating}
-
-                  onChange={(event) => {
-
-                    const nextValue = event.target.value ? event.target.value : null;
-
-                    if ((bug.task_id ?? null) === nextValue) {
-
-                      return;
-
-                    }
-
-                    onUpdate({ id: bug.id, task_id: nextValue });
-
-                  }}
-
-                >
-
-                  <option value="">Not linked</option>
-
-                  {taskOptions.map((task) => (
-
-                    <option key={task.id} value={task.id}>
-
-                      {task.label}
-
-                    </option>
-
-                  ))}
-
-                </select>
-
-                <p className="text-subtle">Currently: {getTaskLabel(bug.task_id)}</p>
-
-              </div>
-
-            </div>
-
-            <div style={{ marginTop: "0.75rem" }}>
-
-              <button
-
-                type="button"
-
-                className="button button--danger"
-
-                onClick={() => onDelete(bug.id)}
-
-                disabled={deleting}
-
+      {bugs.map((bug) => {
+        const isEditing = editingBugId === bug.id;
+        return (
+          <li key={bug.id}>
+            {isEditing ? (
+              <form
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  if (!editingTitle.trim()) {
+                    return;
+                  }
+                  onUpdate(
+                    { id: bug.id, title: editingTitle.trim() },
+                    {
+                      onSuccess: () => {
+                        setEditingBugId(null);
+                        setEditingTitle("");
+                      },
+                    },
+                  );
+                }}
+                className="card inline-edit-form"
               >
-
-                {deleting ? "Deleting..." : "Delete bug"}
-
-              </button>
-
-            </div>
-
-          </div>
-
-        </li>
-
-      ))}
+                <input
+                  type="text"
+                  value={editingTitle}
+                  onChange={(event) => setEditingTitle(event.target.value)}
+                  className="input"
+                  placeholder="Bug title"
+                  autoFocus
+                />
+                <div className="inline-edit-actions">
+                  <button
+                    type="submit"
+                    className="button button--primary"
+                    disabled={updating || !editingTitle.trim()}
+                  >
+                    {updating ? "Saving..." : "Save"}
+                  </button>
+                  <button
+                    type="button"
+                    className="button button--secondary"
+                    onClick={() => {
+                      setEditingBugId(null);
+                      setEditingTitle("");
+                    }}
+                    disabled={updating}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <div className="card">
+                <button
+                  type="button"
+                  className="icon-button"
+                  aria-label={`Edit ${bug.title}`}
+                  onClick={() => {
+                    setEditingBugId(bug.id);
+                    setEditingTitle(bug.title);
+                  }}
+                >
+                  <svg aria-hidden="true" focusable="false" width="14" height="14" viewBox="0 0 20 20">
+                    <path
+                      d="M4 13.5V16h2.5l7.4-7.4-2.5-2.5L4 13.5zm11.7-7.3a.7.7 0 0 0 0-1L13.8 3.3a.7.7 0 0 0-1 0l-1.2 1.2 2.5 2.5 1.1-1.2z"
+                      fill="currentColor"
+                    />
+                  </svg>
+                </button>
+                <div className="item-title">{bug.title}</div>
+                {bug.description && <p className="text-subtle">{bug.description}</p>}
+                <p className="text-subtle">Reported {new Date(bug.created_at).toLocaleString()}</p>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "1rem", marginTop: "0.75rem" }}>
+                  <div className="form-field" style={{ minWidth: "160px", marginBottom: 0 }}>
+                    <label htmlFor={`bug-${bug.id}-status`}>Status</label>
+                    <select
+                      id={`bug-${bug.id}-status`}
+                      className="input"
+                      value={bug.status}
+                      disabled={updating}
+                      onChange={(event) => {
+                        const nextStatus = event.target.value;
+                        if (nextStatus === bug.status) {
+                          return;
+                        }
+                        onUpdate({ id: bug.id, status: nextStatus });
+                      }}
+                    >
+                      {BUG_STATUSES.map((status) => (
+                        <option key={status} value={status}>
+                          {formatStatusLabel(status)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="form-field" style={{ minWidth: "160px", marginBottom: 0 }}>
+                    <label htmlFor={`bug-${bug.id}-severity`}>Severity</label>
+                    <select
+                      id={`bug-${bug.id}-severity`}
+                      className="input"
+                      value={bug.severity}
+                      disabled={updating}
+                      onChange={(event) => {
+                        const nextSeverity = event.target.value;
+                        if (nextSeverity === bug.severity) {
+                          return;
+                        }
+                        onUpdate({ id: bug.id, severity: nextSeverity });
+                      }}
+                    >
+                      {BUG_SEVERITIES.map((level) => (
+                        <option key={level} value={level}>
+                          {level}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="form-field" style={{ minWidth: "220px", marginBottom: 0 }}>
+                    <label htmlFor={`bug-${bug.id}-task`}>Linked task</label>
+                    <select
+                      id={`bug-${bug.id}-task`}
+                      className="input"
+                      value={bug.task_id ?? ""}
+                      disabled={updating}
+                      onChange={(event) => {
+                        const nextValue = event.target.value ? event.target.value : null;
+                        if ((bug.task_id ?? null) === nextValue) {
+                          return;
+                        }
+                        onUpdate({ id: bug.id, task_id: nextValue });
+                      }}
+                    >
+                      <option value="">Not linked</option>
+                      {taskOptions.map((task) => (
+                        <option key={task.id} value={task.id}>
+                          {task.label}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-subtle">Currently: {getTaskLabel(bug.task_id)}</p>
+                  </div>
+                </div>
+                <div style={{ marginTop: "0.75rem" }}>
+                  <button
+                    type="button"
+                    className="button button--danger"
+                    onClick={() => onDelete(bug.id)}
+                    disabled={deleting}
+                  >
+                    {deleting ? "Deleting..." : "Delete bug"}
+                  </button>
+                </div>
+              </div>
+            )}
+          </li>
+        );
+      })}
 
     </ul>
 
   );
 
 }
-
-
-
-
 
 function ErrorMessage({ error }: { error: unknown }) {
 

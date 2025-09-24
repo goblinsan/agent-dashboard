@@ -94,6 +94,7 @@ a:hover {
   border-radius: 0.75rem;
   padding: 1rem;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  position: relative;
 }
 
 .card + .card {
@@ -195,6 +196,19 @@ a:hover {
   transform: translateY(1px);
 }
 
+.button--secondary {
+  background: #f1f5f9;
+  color: #1f2937;
+}
+
+.button--secondary:hover:not(:disabled) {
+  background: #e2e8f0;
+}
+
+.button--secondary:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
 .button--danger {
   background: #ef4444;
   color: #ffffff;
@@ -223,6 +237,50 @@ a:hover {
   color: #475569;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+}
+
+.edit-icon {
+  position: absolute;
+  top: 0.6rem;
+  right: 0.6rem;
+  cursor: pointer;
+  color: #94a3b8;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.edit-icon:hover,
+.edit-icon:focus-visible {
+  color: #1d4ed8;
+}
+
+.icon-button {
+  position: absolute;
+  top: 0.6rem;
+  right: 0.6rem;
+  border: none;
+  background: transparent;
+  padding: 0.1rem;
+  cursor: pointer;
+  color: #94a3b8;
+}
+
+.icon-button:hover,
+.icon-button:focus-visible {
+  color: #1d4ed8;
+}
+
+.inline-edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.inline-edit-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
 }
 
 .error {

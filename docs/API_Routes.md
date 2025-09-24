@@ -16,6 +16,7 @@ Use `curl` or any HTTP client. Examples below assume a Unix-like shell; on Windo
 | `GET` | `/v1/projects` | List projects. Optional `parent_id` query for nested setups. |
 | `POST` | `/v1/projects` | Create a project (`name`, optional `goal`, `direction`, `parent_id`). |
 | `GET` | `/v1/projects/{project_id}` | Retrieve a single project. |
+| `PATCH` | `/v1/projects/{project_id}` | Update project metadata (`name`, `goal`, `direction`, `parent_id`). |
 | `GET` | `/v1/projects/{project_id}/status` | Aggregated effort + completion metrics for the project. |
 | `GET` | `/v1/projects/{project_id}/status/summary` | Natural language daily summary. |
 | `GET` | `/v1/projects/{project_id}/next-action` | Top task suggestions based on priority heuristics. |
@@ -36,6 +37,7 @@ curl -s -X POST http://localhost:8080/v1/projects \
 | `GET` | `/v1/milestones` | List milestones. Filter with `project_id`. |
 | `POST` | `/v1/milestones` | Create a milestone (requires `project_id`, `name`; optional `description`, dates, status). |
 | `GET` | `/v1/milestones/{milestone_id}` | Fetch a milestone by ID. |
+| `PATCH` | `/v1/milestones/{milestone_id}` | Update milestone fields (`name`, `description`, status, dates). |
 
 > Creating a milestone validates that the `project_id` exists.
 

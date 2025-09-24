@@ -26,6 +26,13 @@ class ProjectRead(ProjectBase):
     model_config = {"from_attributes": True}
 
 
+class ProjectUpdate(BaseModel):
+    name: Optional[str] = None
+    goal: Optional[str] = None
+    direction: Optional[str] = None
+    parent_id: Optional[UUID] = None
+
+
 class MilestoneBase(BaseModel):
     project_id: UUID
     name: str
@@ -45,6 +52,14 @@ class MilestoneRead(MilestoneBase):
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class MilestoneUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    status: Optional[str] = None
+    start_date: Optional[date] = None
+    due_date: Optional[date] = None
 
 
 class TaskBase(BaseModel):

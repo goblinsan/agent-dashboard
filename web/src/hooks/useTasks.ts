@@ -24,6 +24,8 @@ export type UpdateTaskInput = {
   project_id?: string;
   lock_version: number;
   status?: string;
+  title?: string;
+  description?: string;
 };
 
 export function useTasks(milestoneId?: string) {
@@ -59,8 +61,8 @@ export function useCreateTask(projectId?: string) {
 export function useUpdateTask() {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, lock_version, status }: UpdateTaskInput) =>
-      apiPatch<Task>(`/v1/tasks/${id}`, { status, lock_version }),
+    mutationFn: ({ id, milestone_id, project_id, ...payload }: UpdateTaskInput) =>
+      apiPatch<Task>(`/v1/tasks/${id}`, payload),
     onSuccess: (_, variables) => {
       client.invalidateQueries({ queryKey: ["tasks", variables.milestone_id] });
       if (variables.project_id) {

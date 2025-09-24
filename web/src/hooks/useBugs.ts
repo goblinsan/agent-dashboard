@@ -24,6 +24,7 @@ export type BugCreateInput = {
 
 export type BugUpdateInput = {
   id: string;
+  title?: string;
   status?: string;
   description?: string;
   severity?: string;

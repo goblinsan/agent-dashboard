@@ -8,7 +8,14 @@ from sqlalchemy.orm import Session
 
 from app.db import get_session
 from app.models import Project
-from app.schemas import ProjectCreate, ProjectRead, ProjectStatusRead, ProjectNextActions, ProjectStatusSummary
+from app.schemas import (
+    ProjectCreate,
+    ProjectRead,
+    ProjectStatusRead,
+    ProjectNextActions,
+    ProjectStatusSummary,
+    ProjectUpdate,
+)
 from app.services import compute_project_status, select_next_actions, generate_project_summary
 
 router = APIRouter(prefix="/v1/projects", tags=["projects"])
@@ -40,6 +47,19 @@ def get_project(project_id: UUID, db: Session = Depends(get_session)) -> Project
     return ProjectRead.model_validate(project)
 
 
+@router.patch("/{project_id}", response_model=ProjectRead)
+def update_project(project_id: UUID, payload: ProjectUpdate, db: Session = Depends(get_session)) -> ProjectRead:
+    project = db.get(Project, project_id)
+    if project is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+
+    update_data = payload.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(project, field, value)
+
+    db.commit()
+    db.refresh(project)
+    return ProjectRead.model_validate(project)
 
 
 @router.get("/{project_id}/status", response_model=ProjectStatusRead)
