@@ -1,3 +1,4 @@
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -6,9 +7,18 @@ from typing import Iterable
 from sqlalchemy.orm import Session
 
 from app.db import SessionLocal
-from app.models import Milestone, Phase, Project, ProjectPersona, Persona, Task
+from app.models import Bug, Milestone, Phase, Project, ProjectPersona, Persona, Task
 
 PLAN = {
+    "bugs": [
+        {
+            "title": "Persona limits validation produces error",
+            "description": "Adjust API after persona provisioning",
+            "severity": "S3",
+            "status": "open",
+            "task_title": "Personas registry + limits (read-only UI)",
+        }
+    ],
     "project": {
         "name": "Multi-Agent Project Dashboard",
         "goal": "Reach a usable vertical slice that lets us plan this project inside the product",
@@ -52,7 +62,8 @@ PLAN = {
                         },
                         {
                             "title": "Endpoints: .well-known/schemas, POST/GET projects, milestones, tasks",
-                            "status": "done"},
+                            "status": "done",
+                        },
                         {"title": "Optimistic locking on PATCH /v1/tasks/:id", "status": "done"},
                     ],
                 },
@@ -147,6 +158,31 @@ def _assign_personas_to_project(session: Session, project: Project) -> None:
         link.limit_per_agent = payload.get("limit_per_agent")
 
 
+def _upsert_bug(session: Session, project: Project, payload: dict[str, object]) -> Bug:
+    task_title = payload.get("task_title")
+    task = None
+    if task_title:
+        task = (
+            session.query(Task)
+            .filter(Task.project_id == project.id)
+            .filter(Task.title == task_title)
+            .one_or_none()
+        )
+    bug = (
+        session.query(Bug)
+        .filter(Bug.project_id == project.id, Bug.title == payload["title"])
+        .one_or_none()
+    )
+    if bug is None:
+        bug = Bug(project_id=project.id, title=payload["title"])
+        session.add(bug)
+    bug.description = payload.get("description")
+    bug.severity = payload.get("severity", "S3")
+    bug.status = payload.get("status", "open")
+    bug.task_id = task.id if task else None
+    return bug
+
+
 def _get_or_create_milestone(session: Session, project: Project, name: str, description: str) -> Milestone:
     milestone = (
         session.query(Milestone)
@@ -216,6 +252,9 @@ def import_execution_plan() -> None:
         _ensure_personas(session)
         _assign_personas_to_project(session, project)
 
+        for bug_payload in PLAN["bugs"]:
+            _upsert_bug(session, project, bug_payload)
+
         for milestone_payload in PLAN["milestones"]:
             milestone = _get_or_create_milestone(
                 session,
@@ -244,4 +283,3 @@ def import_execution_plan() -> None:
 
 if __name__ == "__main__":
     import_execution_plan()
-

@@ -24,6 +24,7 @@ class Project(Base):
     children = relationship("Project", back_populates="parent", cascade="all, delete-orphan")
     milestones = relationship("Milestone", back_populates="project", cascade="all, delete-orphan")
     personas = relationship("ProjectPersona", back_populates="project", cascade="all, delete-orphan")
+    bugs = relationship("Bug", back_populates="project", cascade="all, delete-orphan")
 
 
 class Milestone(Base):
@@ -45,7 +46,7 @@ class Milestone(Base):
 
     project = relationship("Project", back_populates="milestones")
     phases = relationship("Phase", back_populates="milestone", cascade="all, delete-orphan")
-    tasks = relationship("Task", back_populates="milestone", cascade="all, delete-orphan")
+    tasks = relationship("Task", back_populates="milestone", cascade="all, delete-orphan")\n    bugs = relationship("Bug", back_populates="project", cascade="all, delete-orphan")
 
 
 class Phase(Base):
@@ -107,7 +108,7 @@ class Task(Base):
     milestone = relationship("Milestone", back_populates="tasks")
     phase = relationship("Phase", back_populates="tasks")
     parent = relationship("Task", remote_side=[id], back_populates="children")
-    children = relationship("Task", back_populates="parent", cascade="all, delete-orphan")
+    children = relationship("Task", back_populates="parent", cascade="all, delete-orphan")\n    bugs = relationship("Bug", back_populates="task")
 
     __table_args__ = (
         CheckConstraint("effort_estimate >= 0", name="task_effort_estimate_non_negative"),
@@ -139,3 +140,19 @@ class ProjectPersona(Base):
 
     project = relationship("Project", back_populates="personas")
     persona = relationship("Persona", back_populates="projects")
+
+class Bug(Base):
+    __tablename__ = "bugs"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    project_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    task_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("tasks.id", ondelete="SET NULL"), nullable=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    severity: Mapped[str] = mapped_column(String(2), nullable=False, default="S3")
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="open")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    project = relationship("Project", back_populates="bugs")
+    task = relationship("Task", back_populates="bugs")

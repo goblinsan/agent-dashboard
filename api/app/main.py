@@ -3,7 +3,7 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .routes import milestones, personas, projects, tasks, well_known
+from .routes import bugs, milestones, personas, projects, tasks, well_known
 
 app = FastAPI(title="MADB API", version="0.1.0")
 
@@ -24,7 +24,7 @@ app.add_middleware(
 app.include_router(well_known.router)
 app.include_router(projects.router)
 app.include_router(milestones.router)
-app.include_router(tasks.router)
+app.include_router(tasks.router)\napp.include_router(bugs.router)
 app.include_router(personas.router)
 
 
@@ -32,3 +32,4 @@ def run() -> None:
     import uvicorn
 
     uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("API_PORT", 8080)))
+

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { api, apiPost } from "../api/client";
+import { api, apiPatch, apiPost } from "../api/client";
 
 type Task = {
   id: string;
@@ -17,6 +17,14 @@ export type CreateTaskInput = {
   description?: string;
 };
 
+export type UpdateTaskInput = {
+  id: string;
+  milestone_id: string;
+  project_id?: string;
+  lock_version: number;
+  status?: string;
+};
+
 export function useTasks(milestoneId?: string) {
   return useQuery({
     enabled: Boolean(milestoneId),
@@ -25,12 +33,31 @@ export function useTasks(milestoneId?: string) {
   });
 }
 
-export function useCreateTask() {
+export function useCreateTask(projectId?: string) {
   const client = useQueryClient();
   return useMutation({
     mutationFn: (input: CreateTaskInput) => apiPost<Task>("/v1/tasks", input),
     onSuccess: (_, variables) => {
       client.invalidateQueries({ queryKey: ["tasks", variables.milestone_id] });
+      if (projectId) {
+        client.invalidateQueries({ queryKey: ["project", projectId, "status"] });
+        client.invalidateQueries({ queryKey: ["project", projectId, "next-actions"] });
+      }
+    },
+  });
+}
+
+export function useUpdateTask() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, lock_version, status }: UpdateTaskInput) =>
+      apiPatch<Task>(`/v1/tasks/${id}`, { status, lock_version }),
+    onSuccess: (_, variables) => {
+      client.invalidateQueries({ queryKey: ["tasks", variables.milestone_id] });
+      if (variables.project_id) {
+        client.invalidateQueries({ queryKey: ["project", variables.project_id, "status"] });
+        client.invalidateQueries({ queryKey: ["project", variables.project_id, "next-actions"] });
+      }
     },
   });
 }

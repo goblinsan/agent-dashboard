@@ -150,3 +150,31 @@ class ProjectPersonaRead(BaseModel):
     persona: PersonaBase
 
     model_config = {"from_attributes": True}
+
+class BugBase(BaseModel):
+    project_id: UUID
+    task_id: Optional[UUID] = None
+    title: str
+    description: Optional[str] = None
+    severity: str = "S3"
+    status: str = "open"
+
+
+class BugCreate(BugBase):
+    pass
+
+
+class BugUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    severity: Optional[str] = None
+    status: Optional[str] = None
+    task_id: Optional[UUID] = None
+
+
+class BugRead(BugBase):
+    id: UUID
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
