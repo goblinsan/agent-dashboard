@@ -23,7 +23,7 @@ Reach a usable vertical slice that lets us plan this project **inside** the prod
 ## Milestone: MVP1 — Usability
 - [x] Personas registry + limits (read-only UI)
 - [x] Basic bug tracker (CRUD, link to tasks)
-- [ ] Event log (append-only) + activity view *(in progress)*
+- [x] Event log (append-only) + activity view *(in progress)*
 
 ## Definition of Ready
 - API & DB up with a single command; OpenAPI docs available; can create/list projects, milestones, tasks.
