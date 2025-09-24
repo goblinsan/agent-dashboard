@@ -46,7 +46,7 @@ class Milestone(Base):
 
     project = relationship("Project", back_populates="milestones")
     phases = relationship("Phase", back_populates="milestone", cascade="all, delete-orphan")
-    tasks = relationship("Task", back_populates="milestone", cascade="all, delete-orphan")\n    bugs = relationship("Bug", back_populates="project", cascade="all, delete-orphan")
+    tasks = relationship("Task", back_populates="milestone", cascade="all, delete-orphan")
 
 
 class Phase(Base):
@@ -108,7 +108,8 @@ class Task(Base):
     milestone = relationship("Milestone", back_populates="tasks")
     phase = relationship("Phase", back_populates="tasks")
     parent = relationship("Task", remote_side=[id], back_populates="children")
-    children = relationship("Task", back_populates="parent", cascade="all, delete-orphan")\n    bugs = relationship("Bug", back_populates="task")
+    children = relationship("Task", back_populates="parent", cascade="all, delete-orphan")
+    bugs = relationship("Bug", back_populates="task")
 
     __table_args__ = (
         CheckConstraint("effort_estimate >= 0", name="task_effort_estimate_non_negative"),

@@ -27,3 +27,16 @@ export async function apiPost<T>(path: string, body: unknown): Promise<T> {
     body: JSON.stringify(body),
   });
 }
+
+export async function apiPatch<T>(path: string, body: unknown): Promise<T> {
+  return api<T>(path, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function apiDelete(path: string): Promise<void> {
+  await api<void>(path, {
+    method: "DELETE",
+  });
+}

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { api, apiPatch, apiPost } from "../api/client";
+import { api, apiDelete, apiPatch, apiPost } from "../api/client";
 
 export type Bug = {
   id: string;
@@ -38,22 +38,38 @@ export function useBugs(projectId?: string) {
   });
 }
 
-export function useCreateBug(projectId: string) {
+export function useCreateBug(projectId?: string) {
   const client = useQueryClient();
   return useMutation({
     mutationFn: (input: BugCreateInput) => apiPost<Bug>("/v1/bugs", { status: "open", severity: "S3", ...input }),
     onSuccess: () => {
-      client.invalidateQueries({ queryKey: ["bugs", projectId] });
+      if (projectId) {
+        client.invalidateQueries({ queryKey: ["bugs", projectId] });
+      }
     },
   });
 }
 
-export function useUpdateBug(projectId: string) {
+export function useUpdateBug(projectId?: string) {
   const client = useQueryClient();
   return useMutation({
     mutationFn: ({ id, ...payload }: BugUpdateInput) => apiPatch<Bug>(`/v1/bugs/${id}`, payload),
     onSuccess: () => {
-      client.invalidateQueries({ queryKey: ["bugs", projectId] });
+      if (projectId) {
+        client.invalidateQueries({ queryKey: ["bugs", projectId] });
+      }
+    },
+  });
+}
+
+export function useDeleteBug(projectId?: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => apiDelete(`/v1/bugs/${id}`),
+    onSuccess: () => {
+      if (projectId) {
+        client.invalidateQueries({ queryKey: ["bugs", projectId] });
+      }
     },
   });
 }

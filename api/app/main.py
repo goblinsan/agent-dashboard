@@ -24,7 +24,8 @@ app.add_middleware(
 app.include_router(well_known.router)
 app.include_router(projects.router)
 app.include_router(milestones.router)
-app.include_router(tasks.router)\napp.include_router(bugs.router)
+app.include_router(tasks.router)
+app.include_router(bugs.router)
 app.include_router(personas.router)
 
 

@@ -44,10 +44,13 @@ def create_task(payload: TaskCreate, db: Session = Depends(get_session)) -> Task
 @router.get("", response_model=list[TaskRead])
 def list_tasks(
     milestone_id: Optional[UUID] = None,
+    project_id: Optional[UUID] = None,
     phase_id: Optional[UUID] = None,
     db: Session = Depends(get_session),
 ) -> list[TaskRead]:
     query = db.query(Task)
+    if project_id:
+        query = query.join(Milestone).filter(Milestone.project_id == project_id)
     if milestone_id:
         query = query.filter(Task.milestone_id == milestone_id)
     if phase_id:

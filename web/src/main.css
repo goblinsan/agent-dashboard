@@ -195,6 +195,19 @@ a:hover {
   transform: translateY(1px);
 }
 
+.button--danger {
+  background: #ef4444;
+  color: #ffffff;
+}
+
+.button--danger:hover:not(:disabled) {
+  background: #dc2626;
+}
+
+.button--danger:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
 .empty-state {
   font-size: 0.9rem;
   color: #64748b;

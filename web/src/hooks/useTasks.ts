@@ -2,8 +2,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, apiPatch, apiPost } from "../api/client";
 
-type Task = {
+export type Task = {
   id: string;
+  milestone_id: string;
   title: string;
   description?: string;
   status: string;
@@ -30,6 +31,14 @@ export function useTasks(milestoneId?: string) {
     enabled: Boolean(milestoneId),
     queryKey: ["tasks", milestoneId],
     queryFn: () => api<Task[]>(`/v1/tasks?milestone_id=${milestoneId}`),
+  });
+}
+
+export function useProjectTasks(projectId?: string) {
+  return useQuery({
+    enabled: Boolean(projectId),
+    queryKey: ["tasks", "project", projectId],
+    queryFn: () => api<Task[]>(`/v1/tasks?project_id=${projectId}`),
   });
 }
 
