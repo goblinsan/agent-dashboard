@@ -17,6 +17,18 @@ class Project(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     goal: Mapped[str | None] = mapped_column(Text, nullable=True)
     direction: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(
+        Enum(
+            "planning",
+            "in_progress",
+            "on_hold",
+            "completed",
+            "archived",
+            name="project_status",
+        ),
+        default="planning",
+        nullable=False,
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
 

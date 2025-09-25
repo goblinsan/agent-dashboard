@@ -1,21 +1,4 @@
-@router.get("/projects/{project_id}/{persona_key}", response_model=ProjectPersonaRead)
-def get_project_persona(project_id: UUID, persona_key: str, db: Session = Depends(get_session)) -> ProjectPersonaRead:
-    record = (
-        db.query(ProjectPersona)
-        .filter(ProjectPersona.project_id == project_id, ProjectPersona.persona_key == persona_key)
-        .first()
-    )
-    if record is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Persona '{persona_key}' not assigned to project")
-    persona = PersonaRead.model_validate(record.persona)
-    return ProjectPersonaRead(
-        project_id=record.project_id,
-        persona_key=record.persona_key,
-        limit_per_agent=record.limit_per_agent,
-        persona=persona,
-    )
 from __future__ import annotations
-
 from typing import List
 from uuid import UUID
 
@@ -32,6 +15,23 @@ from app.schemas import (
 )
 
 router = APIRouter(prefix="/v1/personas", tags=["personas"])
+
+@router.get("/projects/{project_id}/{persona_key}", response_model=ProjectPersonaRead)
+def get_project_persona(project_id: UUID, persona_key: str, db: Session = Depends(get_session)) -> ProjectPersonaRead:
+    record = (
+        db.query(ProjectPersona)
+        .filter(ProjectPersona.project_id == project_id, ProjectPersona.persona_key == persona_key)
+        .first()
+    )
+    if record is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Persona '{persona_key}' not assigned to project")
+    persona = PersonaRead.model_validate(record.persona)
+    return ProjectPersonaRead(
+        project_id=record.project_id,
+        persona_key=record.persona_key,
+        limit_per_agent=record.limit_per_agent,
+        persona=persona,
+    )
 
 @router.post("", response_model=PersonaRead, status_code=status.HTTP_201_CREATED)
 def create_persona(payload: PersonaBase, db: Session = Depends(get_session)) -> PersonaRead:

@@ -10,6 +10,8 @@ export type Task = {
   status: string;
   lock_version: number;
   persona_required?: string | null;
+  effort_estimate?: number;
+  effort_spent?: number;
 };
 
 export type CreateTaskInput = {

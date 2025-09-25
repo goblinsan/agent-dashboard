@@ -12,6 +12,7 @@ class ProjectBase(BaseModel):
     goal: Optional[str] = None
     direction: Optional[str] = None
     parent_id: Optional[UUID] = Field(default=None, description="Parent project id if nested")
+    status: str = Field(default="planning", description="High-level project status")
 
 
 class ProjectCreate(ProjectBase):
@@ -31,6 +32,7 @@ class ProjectUpdate(BaseModel):
     goal: Optional[str] = None
     direction: Optional[str] = None
     parent_id: Optional[UUID] = None
+    status: Optional[str] = None
 
 
 class MilestoneBase(BaseModel):

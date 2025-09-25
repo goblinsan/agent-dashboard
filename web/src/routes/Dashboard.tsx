@@ -59,9 +59,7 @@ export default function DashboardRoute() {
   const [milestoneEdit, setMilestoneEdit] = useState<{ id: string; name: string; projectId: string } | null>(null);
 
   const [taskEdit, setTaskEdit] = useState<{ id: string; title: string; milestoneId: string; projectId?: string; lockVersion: number } | null>(null);
-
   const [worklistPersona, setWorklistPersona] = useState<string>("");
-
 
   useEffect(() => {
     setMilestoneEdit(null);
@@ -181,6 +179,141 @@ export default function DashboardRoute() {
     });
   }, [projectTasks, selectedMilestone, worklistPersona]);
 
+  const milestoneRollup = useMemo(() => {
+    return (milestones ?? []).map((milestone) => {
+      const milestoneTasks = (projectTasks ?? []).filter((task) => task.milestone_id === milestone.id);
+      let totalEstimate = 0;
+      let effortSpent = 0;
+
+      milestoneTasks.forEach((task) => {
+        const estimate = Number(task.effort_estimate ?? 0);
+        let spent = Number(task.effort_spent ?? 0);
+        if (task.status === "done" && spent < estimate) {
+          spent = estimate;
+        }
+        totalEstimate += estimate;
+        effortSpent += Math.min(spent, estimate);
+      });
+
+      const remainingEffort = Math.max(totalEstimate - effortSpent, 0);
+      const percentComplete = totalEstimate > 0 ? Math.max(0, Math.min(100, (effortSpent / totalEstimate) * 100)) : 0;
+
+      return {
+        milestone_id: milestone.id,
+        name: milestone.name,
+        total_estimate: totalEstimate,
+        remaining_effort: remainingEffort,
+        percent_complete: percentComplete,
+      };
+    });
+  }, [milestones, projectTasks]);
+
+  const projectProgress = useMemo(() => {
+
+    const tasksList = projectTasks ?? [];
+
+    if (tasksList.length === 0) {
+
+      return {
+
+        totalEstimate: 0,
+
+        effortSpent: 0,
+
+        remainingEffort: 0,
+
+        percentComplete: 0,
+
+        statusBreakdown: {},
+
+      };
+
+    }
+
+
+
+    let totalEstimate = 0;
+
+    let effortSpent = 0;
+
+    const breakdown = new Map<string, number>();
+
+
+
+    tasksList.forEach((task) => {
+
+      breakdown.set(task.status, (breakdown.get(task.status) ?? 0) + 1);
+
+
+
+      const estimate = Number(task.effort_estimate ?? 0);
+
+      let spent = Number(task.effort_spent ?? 0);
+
+      if (task.status === "done" && estimate > 0 && spent < estimate) {
+
+        spent = estimate;
+
+      }
+
+      totalEstimate += estimate;
+
+      effortSpent += Math.min(spent, estimate);
+
+    });
+
+
+
+    const remainingEffort = Math.max(totalEstimate - effortSpent, 0);
+
+    let percentComplete = 0;
+
+    if (totalEstimate > 0) {
+
+      percentComplete = Math.max(0, Math.min(100, (effortSpent / totalEstimate) * 100));
+
+    } else {
+
+      const doneCount = tasksList.filter((task) => task.status === "done").length;
+
+      percentComplete = Math.max(0, Math.min(100, (doneCount / tasksList.length) * 100));
+
+    }
+
+
+
+    return {
+
+      totalEstimate,
+
+      effortSpent,
+
+      remainingEffort,
+
+      percentComplete,
+
+      statusBreakdown: Object.fromEntries(breakdown),
+
+    };
+
+  }, [projectTasks]);
+
+
+
+  const hasProjectTasks = (projectTasks?.length ?? 0) > 0;
+  const progressPercent = hasProjectTasks
+    ? projectProgress.percentComplete
+    : statusSummary?.percent_complete ?? 0;
+  const remainingEffort = hasProjectTasks
+    ? projectProgress.remainingEffort
+    : statusSummary?.remaining_effort ?? 0;
+  const totalEstimate = hasProjectTasks
+    ? projectProgress.totalEstimate
+    : statusSummary?.total_estimate ?? 0;
+  const statusBreakdown = hasProjectTasks
+    ? projectProgress.statusBreakdown
+    : statusSummary?.status_breakdown ?? {};
+
   const taskLookup = useMemo(() => {
 
     const lookup = new Map<string, Task>();
@@ -507,7 +640,7 @@ export default function DashboardRoute() {
 
           <h2 className="section-title">Status Overview</h2>
 
-          {statusSummary ? (
+          {statusSummary || hasProjectTasks ? (
 
             <>
 
@@ -537,13 +670,13 @@ export default function DashboardRoute() {
 
                   <p className="text-subtle" style={{ marginTop: "0.5rem" }}>
 
-                    {statusSummary.percent_complete.toFixed(1)}% complete
+                    {progressPercent.toFixed(1)}% complete
 
                   </p>
 
                   <p className="text-subtle">
 
-                    Remaining {statusSummary.remaining_effort.toFixed(1)}h of {statusSummary.total_estimate.toFixed(1)}h
+                    Remaining {remainingEffort.toFixed(1)}h of {totalEstimate.toFixed(1)}h
 
                   </p>
 
@@ -553,7 +686,7 @@ export default function DashboardRoute() {
 
                     <ul className="list" style={{ marginTop: "0.35rem" }}>
 
-                      {Object.entries(statusSummary.status_breakdown).map(([status, count]) => (
+                      {Object.entries(statusBreakdown).map(([status, count]) => (
 
                         <li key={status} className="text-subtle">
 
@@ -563,7 +696,7 @@ export default function DashboardRoute() {
 
                       ))}
 
-                      {Object.keys(statusSummary.status_breakdown).length === 0 && (
+                      {Object.keys(statusBreakdown).length === 0 && (
 
                         <li className="text-subtle">No tasks yet.</li>
 
@@ -583,13 +716,13 @@ export default function DashboardRoute() {
 
                   <ul className="list" style={{ marginTop: "0.5rem" }}>
 
-                    {statusSummary.milestones.length === 0 && (
+                    {milestoneRollup.length === 0 && (
 
                       <li className="text-subtle">Add a milestone to compute progress.</li>
 
                     )}
 
-                    {statusSummary.milestones.map((milestone) => (
+                    {milestoneRollup.map((milestone) => (
 
                       <li key={milestone.milestone_id} className="text-subtle">
 
