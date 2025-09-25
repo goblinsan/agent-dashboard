@@ -15,6 +15,10 @@ const BUG_SEVERITIES = ["S1", "S2", "S3", "S4"];
 const BUG_STATUSES = ["open", "in_progress", "blocked", "resolved", "closed"];
 const EVENT_CATEGORIES = ["note", "update", "decision", "risk"];
 
+const ACTIVE_TASK_STATUSES = new Set(["in progress", "pending review"]);
+
+const INACTIVE_TASK_STATUSES = new Set(["done", "complete", "completed", "closed", "resolved"]);
+
 function formatTaskLabel(task: Task, milestoneLookup: Map<string, string>): string {
 
   const milestoneName = milestoneLookup.get(task.milestone_id);
@@ -44,6 +48,13 @@ async function copyIdToClipboard(id: string) {
   } catch (error) {
     console.error("Failed to copy id", error);
   }
+}
+
+function normalizeTaskStatus(status?: string | null): string {
+  return (status ?? "")
+    .replace(/_/g, " ")
+    .trim()
+    .toLowerCase();
 }
 
 export default function DashboardRoute() {
@@ -300,20 +311,26 @@ export default function DashboardRoute() {
 
 
 
-  const hasProjectTasks = (projectTasks?.length ?? 0) > 0;
+  const hasProjectTasks = (projectTasks?.length ?? 0) > 0;
+
   const progressPercent = hasProjectTasks
     ? projectProgress.percentComplete
-    : statusSummary?.percent_complete ?? 0;
+    : statusSummary?.percent_complete ?? 0;
+
   const remainingEffort = hasProjectTasks
     ? projectProgress.remainingEffort
-    : statusSummary?.remaining_effort ?? 0;
+    : statusSummary?.remaining_effort ?? 0;
+
   const totalEstimate = hasProjectTasks
     ? projectProgress.totalEstimate
-    : statusSummary?.total_estimate ?? 0;
+    : statusSummary?.total_estimate ?? 0;
+
   const statusBreakdown = hasProjectTasks
     ? projectProgress.statusBreakdown
-    : statusSummary?.status_breakdown ?? {};
-
+    : statusSummary?.status_breakdown ?? {};
+
+
+
   const taskLookup = useMemo(() => {
 
     const lookup = new Map<string, Task>();
@@ -324,6 +341,37 @@ export default function DashboardRoute() {
 
     return lookup;
   }, [projectTasks]);
+
+  const inProgressMilestones = useMemo(() => {
+    if (!projectTasks) {
+      return [];
+    }
+    return milestoneRollup
+      .filter((milestone) => {
+        if (milestone.percent_complete <= 0 || milestone.percent_complete >= 100) {
+          return false;
+        }
+        const hasActiveTask = projectTasks.some((task) => {
+          if (task.milestone_id !== milestone.milestone_id) {
+            return false;
+          }
+          return !INACTIVE_TASK_STATUSES.has(normalizeTaskStatus(task.status));
+        });
+        return hasActiveTask;
+      })
+      .sort((a, b) => a.percent_complete - b.percent_complete);
+  }, [milestoneRollup, projectTasks]);
+
+  const activeProjectTasks = useMemo(() => {
+    if (!projectTasks) {
+      return [];
+    }
+    return projectTasks
+      .filter((task) => ACTIVE_TASK_STATUSES.has(normalizeTaskStatus(task.status)))
+      .sort((a, b) => a.title.localeCompare(b.title));
+  }, [projectTasks]);
+
+  const selectedMilestoneName = selectedMilestone ? milestoneLookup.get(selectedMilestone) ?? "" : "";
 
   const handleProjectEditSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -365,157 +413,54 @@ export default function DashboardRoute() {
   };
 
 
+
   return (
-
     <Layout title="Dashboard">
-
-      <div className="grid grid--two">
-
-        <section>
-
-          <h2 className="section-title">Projects</h2>
-
-          <ProjectForm onSubmit={(values) => createProject.mutate(values)} submitting={createProject.isPending} />
-
-          {projectsLoading && <p className="empty-state">Loading projects...</p>}
-
-          {projectsError && <ErrorMessage error={projectsError} />}
-
-          <ul className="list">
-
-            {projects?.map((project) => {
-              const isEditing = projectEdit?.id === project.id;
-              return (
-                <li key={project.id}>
-                  {isEditing ? (
-                    <form onSubmit={handleProjectEditSubmit} className="card inline-edit-form">
-                      <input
-                        type="text"
-                        value={projectEdit?.name ?? ""}
-                        onChange={(event) =>
-                          setProjectEdit((prev) => (prev ? { ...prev, name: event.target.value } : prev))
-                        }
-                        className="input"
-                        placeholder="Project name"
-                        autoFocus
-                      />
-                      <div className="inline-edit-actions">
-                        <button
-                          type="submit"
-                          className="button button--primary"
-                          disabled={updateProject.isPending || !projectEdit?.name.trim()}
-                        >
-                          {updateProject.isPending ? "Saving..." : "Save"}
-                        </button>
-                        <button
-                          type="button"
-                          className="button button--secondary"
-                          onClick={() => setProjectEdit(null)}
-                          disabled={updateProject.isPending}
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </form>
-                  ) : (
-                    <div
-                      className={`card card--selectable ${selectedProject === project.id ? "card--active" : ""}`}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => {
-                        setSelectedProject(project.id);
-                        setSelectedMilestone(undefined);
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" || event.key === " ") {
-                          event.preventDefault();
-                          setSelectedProject(project.id);
-                          setSelectedMilestone(undefined);
-                        }
-                      }}
-                    >
-                      <button
-                        type="button"
-                        className="icon-button"
-                        aria-label={`Edit ${project.name}`}
-                        onClick={(event) => {
-                          event.preventDefault();
-                          event.stopPropagation();
-                          setProjectEdit({ id: project.id, name: project.name });
-                        }}
-                      >
-                        <svg aria-hidden="true" focusable="false" width="14" height="14" viewBox="0 0 20 20">
-                          <path
-                            d="M4 13.5V16h2.5l7.4-7.4-2.5-2.5L4 13.5zm11.7-7.3a.7.7 0 0 0 0-1L13.8 3.3a.7.7 0 0 0-1 0l-1.2 1.2 2.5 2.5 1.1-1.2z"
-                            fill="currentColor"
-                          />
-                        </svg>
-                      </button>
-                      <div className="item-title">{project.name}</div>
-                      {renderCopyButton(project.id)}
-                      {project.goal && <div className="text-subtle">{project.goal}</div>}
-                    </div>
-                  )}
-                </li>
-              );
-            })}
-
-          </ul>
-
-
-        </section>
-
-
-
-        <section>
-
-          <h2 className="section-title">Milestones</h2>
-
-          {selectedProject ? (
-
-            <>
-
-              <MilestoneForm
-
-                projectId={selectedProject!}
-
-                onSubmit={(values) => createMilestone.mutate(values)}
-
-                submitting={createMilestone.isPending}
-
-              />
-
+        <div
+          className="dashboard-shell"
+          style={{
+            display: "grid",
+            gap: "2rem",
+            gridTemplateColumns: "minmax(260px, 320px) 1fr",
+            alignItems: "start",
+          }}
+        >
+          <aside style={{ display: "flex", flexDirection: "column", gap: "2rem" }}>
+            <section>
+              <h2 className="section-title">Projects</h2>
+              <ProjectForm onSubmit={(values) => createProject.mutate(values)} submitting={createProject.isPending} />
+              {projectsLoading && <p className="empty-state">Loading projects...</p>}
+              {projectsError && <ErrorMessage error={projectsError} />}
               <ul className="list">
-
-                {milestones?.map((milestone) => {
-                  const isEditing = milestoneEdit?.id === milestone.id;
+                {projects?.map((project) => {
+                  const isEditing = projectEdit?.id === project.id;
                   return (
-                    <li key={milestone.id}>
+                    <li key={project.id}>
                       {isEditing ? (
-                        <form onSubmit={handleMilestoneEditSubmit} className="card inline-edit-form">
+                        <form onSubmit={handleProjectEditSubmit} className="card inline-edit-form">
                           <input
                             type="text"
-                            value={milestoneEdit?.name ?? ""}
+                            value={projectEdit?.name ?? ""}
                             onChange={(event) =>
-                              setMilestoneEdit((prev) => (prev ? { ...prev, name: event.target.value } : prev))
+                              setProjectEdit((prev) => (prev ? { ...prev, name: event.target.value } : prev))
                             }
                             className="input"
-                            placeholder="Milestone name"
+                            placeholder="Project name"
                             autoFocus
                           />
                           <div className="inline-edit-actions">
                             <button
                               type="submit"
                               className="button button--primary"
-                              disabled={updateMilestone.isPending || !milestoneEdit?.name.trim()}
+                              disabled={updateProject.isPending || !projectEdit?.name.trim()}
                             >
-                              {updateMilestone.isPending ? "Saving..." : "Save"}
+                              {updateProject.isPending ? "Saving..." : "Save"}
                             </button>
                             <button
                               type="button"
                               className="button button--secondary"
-                              onClick={() => setMilestoneEdit(null)}
-                              disabled={updateMilestone.isPending}
+                              onClick={() => setProjectEdit(null)}
+                              disabled={updateProject.isPending}
                             >
                               Cancel
                             </button>
@@ -523,27 +468,29 @@ export default function DashboardRoute() {
                         </form>
                       ) : (
                         <div
-                          className={`card card--selectable ${selectedMilestone === milestone.id ? "card--active" : ""}`}
+                          className={`card card--selectable ${selectedProject === project.id ? "card--active" : ""}`}
                           role="button"
                           tabIndex={0}
-                          onClick={() => setSelectedMilestone(milestone.id)}
+                          onClick={() => {
+                            setSelectedProject(project.id);
+                            setSelectedMilestone(undefined);
+                          }}
                           onKeyDown={(event) => {
                             if (event.key === "Enter" || event.key === " ") {
                               event.preventDefault();
-                              setSelectedMilestone(milestone.id);
+                              setSelectedProject(project.id);
+                              setSelectedMilestone(undefined);
                             }
                           }}
                         >
                           <button
                             type="button"
                             className="icon-button"
-                            aria-label={`Edit ${milestone.name}`}
+                            aria-label={`Edit ${project.name}`}
                             onClick={(event) => {
                               event.preventDefault();
                               event.stopPropagation();
-                              if (selectedProject) {
-                                setMilestoneEdit({ id: milestone.id, name: milestone.name, projectId: selectedProject });
-                              }
+                              setProjectEdit({ id: project.id, name: project.name });
                             }}
                           >
                             <svg aria-hidden="true" focusable="false" width="14" height="14" viewBox="0 0 20 20">
@@ -553,477 +500,471 @@ export default function DashboardRoute() {
                               />
                             </svg>
                           </button>
-                          <div className="item-title">{milestone.name}</div>
-                          {renderCopyButton(milestone.id)}
-                          {milestone.description && <div className="text-subtle">{milestone.description}</div>}
+                          <div className="item-title">{project.name}</div>
+                          {renderCopyButton(project.id)}
+                          {project.goal && <div className="text-subtle">{project.goal}</div>}
                         </div>
                       )}
                     </li>
                   );
                 })}
-
               </ul>
-
-            </>
-
-          ) : (
-
-            <p className="empty-state">Select a project to view its milestones.</p>
-
-          )}
-
-        </section>
-
-      </div>
-
-
-
-      {selectedProject && (
-
-        <section style={{ marginTop: "2rem" }}>
-
-          <h2 className="section-title">Personas & Limits</h2>
-
-          {projectPersonas && projectPersonas.length > 0 ? (
-
-            <ul className="list">
-
-              {projectPersonas.map((entry) => (
-
-                <li key={entry.persona_key}>
-
-                  <div className="card">
-
-                    <div className="item-title">{entry.persona.name}</div>
-
-                    {entry.persona.description && (
-
-                      <p className="text-subtle">{entry.persona.description}</p>
-
-                    )}
-
-                    <div className="text-subtle">
-
-                      Max active tasks: {entry.persona.maximum_active_tasks ?? "unset"}
-
-                    </div>
-
-                    <div className="text-subtle">
-
-                      Limit per agent: {entry.limit_per_agent ?? "unset"}
-
-                    </div>
-
-                  </div>
-
-                </li>
-
-              ))}
-
-            </ul>
-
-          ) : (
-
-            <p className="empty-state">No personas assigned to this project yet.</p>
-
-          )}
-
-        </section>
-
-      )}
-
-
-
-      {selectedProject && (
-
-        <section style={{ marginTop: "2rem" }}>
-
-          <h2 className="section-title">Status Overview</h2>
-
-          {statusSummary || hasProjectTasks ? (
-
-            <>
-
-              {statusText && (
-
-                <div className="card" style={{ marginBottom: "1rem" }}>
-
-                  <div className="item-title">Daily summary</div>
-
-                  <p className="text-subtle" style={{ marginTop: "0.5rem" }}>{statusText.summary}</p>
-
-                  <p className="text-subtle">
-
-                    Generated {new Date(statusText.generated_at).toLocaleString()}
-
-                  </p>
-
-                </div>
-
-              )}
-
-              <div className="grid grid--two">
-
-                <div className="card">
-
-                  <div className="item-title">Progress</div>
-
-                  <p className="text-subtle" style={{ marginTop: "0.5rem" }}>
-
-                    {progressPercent.toFixed(1)}% complete
-
-                  </p>
-
-                  <p className="text-subtle">
-
-                    Remaining {remainingEffort.toFixed(1)}h of {totalEstimate.toFixed(1)}h
-
-                  </p>
-
-                  <div style={{ marginTop: "0.75rem" }}>
-
-                    <small className="text-subtle">Status breakdown</small>
-
-                    <ul className="list" style={{ marginTop: "0.35rem" }}>
-
-                      {Object.entries(statusBreakdown).map(([status, count]) => (
-
-                        <li key={status} className="text-subtle">
-
-                          {status}: {count}
-
+            </section>
+
+            <section>
+              <h2 className="section-title">Milestones</h2>
+              {selectedProject ? (
+                <>
+                  <MilestoneForm
+                    projectId={selectedProject!}
+                    onSubmit={(values) => createMilestone.mutate(values)}
+                    submitting={createMilestone.isPending}
+                  />
+                  <ul className="list">
+                    {milestones?.map((milestone) => {
+                      const isEditing = milestoneEdit?.id === milestone.id;
+                      return (
+                        <li key={milestone.id}>
+                          {isEditing ? (
+                            <form onSubmit={handleMilestoneEditSubmit} className="card inline-edit-form">
+                              <input
+                                type="text"
+                                value={milestoneEdit?.name ?? ""}
+                                onChange={(event) =>
+                                  setMilestoneEdit((prev) => (prev ? { ...prev, name: event.target.value } : prev))
+                                }
+                                className="input"
+                                placeholder="Milestone name"
+                                autoFocus
+                              />
+                              <div className="inline-edit-actions">
+                                <button
+                                  type="submit"
+                                  className="button button--primary"
+                                  disabled={updateMilestone.isPending || !milestoneEdit?.name.trim()}
+                                >
+                                  {updateMilestone.isPending ? "Saving..." : "Save"}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="button button--secondary"
+                                  onClick={() => setMilestoneEdit(null)}
+                                  disabled={updateMilestone.isPending}
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            </form>
+                          ) : (
+                            <div
+                              className={`card card--selectable ${selectedMilestone === milestone.id ? "card--active" : ""}`}
+                              role="button"
+                              tabIndex={0}
+                              onClick={() => setSelectedMilestone(milestone.id)}
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter" || event.key === " ") {
+                                  event.preventDefault();
+                                  setSelectedMilestone(milestone.id);
+                                }
+                              }}
+                            >
+                              <button
+                                type="button"
+                                className="icon-button"
+                                aria-label={`Edit ${milestone.name}`}
+                                onClick={(event) => {
+                                  event.preventDefault();
+                                  event.stopPropagation();
+                                  if (selectedProject) {
+                                    setMilestoneEdit({ id: milestone.id, name: milestone.name, projectId: selectedProject });
+                                  }
+                                }}
+                              >
+                                <svg aria-hidden="true" focusable="false" width="14" height="14" viewBox="0 0 20 20">
+                                  <path
+                                    d="M4 13.5V16h2.5l7.4-7.4-2.5-2.5L4 13.5zm11.7-7.3a.7.7 0 0 0 0-1L13.8 3.3a.7.7 0 0 0-1 0l-1.2 1.2 2.5 2.5 1.1-1.2z"
+                                    fill="currentColor"
+                                  />
+                                </svg>
+                              </button>
+                              <div className="item-title">{milestone.name}</div>
+                              {renderCopyButton(milestone.id)}
+                              {milestone.description && <div className="text-subtle">{milestone.description}</div>}
+                            </div>
+                          )}
                         </li>
-
-                      ))}
-
-                      {Object.keys(statusBreakdown).length === 0 && (
-
-                        <li className="text-subtle">No tasks yet.</li>
-
-                      )}
-
-                    </ul>
-
-                  </div>
-
-                </div>
-
-
-
-                <div className="card">
-
-                  <div className="item-title">Milestone roll-up</div>
-
-                  <ul className="list" style={{ marginTop: "0.5rem" }}>
-
-                    {milestoneRollup.length === 0 && (
-
-                      <li className="text-subtle">Add a milestone to compute progress.</li>
-
-                    )}
-
-                    {milestoneRollup.map((milestone) => (
-
-                      <li key={milestone.milestone_id} className="text-subtle">
-
-                        <strong>{milestone.name}</strong>: {milestone.percent_complete.toFixed(1)}%  Remaining {" "}
-
-                        {milestone.remaining_effort.toFixed(1)}h
-
-                      </li>
-
-                    ))}
-
+                      );
+                    })}
                   </ul>
+                </>
+              ) : (
+                <p className="empty-state">Select a project to view its milestones.</p>
+              )}
+            </section>
+          </aside>
 
-                </div>
-
-              </div>
-
-            </>
-
-          ) : (
-
-            <p className="empty-state">Status metrics will appear after tasks are added.</p>
-
-          )}
-
-        </section>
-
-      )}
-
-
-
-      <section style={{ marginTop: "2rem" }}>
-
-        <h2 className="section-title">Tasks {selectedProjectName ? `for ${selectedProjectName}` : ""}</h2>
-
-        {selectedMilestone ? (
-
-          <>
-
-            <TaskForm
-
-              milestoneId={selectedMilestone}
-
-              onSubmit={(values) => createTask.mutate(values)}
-
-              submitting={createTask.isPending}
-
-            />
-
-            <ul className="list" style={{ marginTop: "1rem" }}>
-
-              {tasks?.map((task) => {
-                const isEditing = taskEdit?.id === task.id;
-                return (
-                  <li key={task.id}>
-                    {isEditing ? (
-                      <form onSubmit={handleTaskEditSubmit} className="card inline-edit-form">
-                        <input
-                          type="text"
-                          value={taskEdit?.title ?? ""}
-                          onChange={(event) =>
-                            setTaskEdit((prev) => (prev ? { ...prev, title: event.target.value } : prev))
-                          }
-                          className="input"
-                          placeholder="Task title"
-                          autoFocus
-                        />
-                        <div className="inline-edit-actions">
-                          <button
-                            type="submit"
-                            className="button button--primary"
-                            disabled={updateTask.isPending || !taskEdit?.title.trim()}
-                          >
-                            {updateTask.isPending ? "Saving..." : "Save"}
-                          </button>
-                          <button
-                            type="button"
-                            className="button button--secondary"
-                            onClick={() => setTaskEdit(null)}
-                            disabled={updateTask.isPending}
-                          >
-                            Cancel
-                          </button>
+          <main style={{ display: "flex", flexDirection: "column", gap: "2rem" }}>
+            {selectedProject ? (
+              <>
+                <section>
+                  <h2 className="section-title">Project Status</h2>
+                  {hasProjectTasks || statusSummary ? (
+                    <>
+                      {statusText && statusText.summary && (
+                        <div className="card" style={{ marginBottom: "1rem" }}>
+                          <div className="item-title">Daily summary</div>
+                          <p className="text-subtle" style={{ marginTop: "0.5rem" }}>{statusText.summary}</p>
+                          <p className="text-subtle">Generated {new Date(statusText.generated_at).toLocaleString()}</p>
                         </div>
-                      </form>
-                    ) : (
-                      <div
-                        className="card"
-                        role="button"
-                        tabIndex={0}
-                        onClick={() => setSelectedMilestone(task.milestone_id)}
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter" || event.key === " ") {
-                            event.preventDefault();
-                            setSelectedMilestone(task.milestone_id);
-                          }
-                        }}
-                      >
-                        <button
-                          type="button"
-                          className="icon-button"
-                          aria-label={`Edit ${task.title}`}
-                          onClick={(event) => {
-                            event.preventDefault();
-                            event.stopPropagation();
-                            setTaskEdit({
-                              id: task.id,
-                              title: task.title,
-                              milestoneId: task.milestone_id,
-                              projectId: selectedProject,
-                              lockVersion: task.lock_version,
-                            });
-                          }}
-                        >
-                          <svg aria-hidden="true" focusable="false" width="14" height="14" viewBox="0 0 20 20">
-                            <path
-                              d="M4 13.5V16h2.5l7.4-7.4-2.5-2.5L4 13.5zm11.7-7.3a.7.7 0 0 0 0-1L13.8 3.3a.7.7 0 0 0-1 0l-1.2 1.2 2.5 2.5 1.1-1.2z"
-                              fill="currentColor"
-                            />
-                          </svg>
-                        </button>
-                        <div className="item-title">{task.title}</div>
-                        {renderCopyButton(task.id)}
-                        {task.description && <div className="text-subtle">{task.description}</div>}
-                        <span className="status-tag">Status: {task.status}</span>
+                      )}
+                      <div className="grid grid--two">
+                        <div className="card">
+                          <div className="item-title">Progress</div>
+                          <p className="text-subtle" style={{ marginTop: "0.5rem" }}>{progressPercent.toFixed(1)}% complete</p>
+                          <p className="text-subtle">Remaining {remainingEffort.toFixed(1)}h of {totalEstimate.toFixed(1)}h</p>
+                          <div style={{ marginTop: "0.75rem" }}>
+                            <small className="text-subtle">Status breakdown</small>
+                            <ul className="list" style={{ marginTop: "0.35rem" }}>
+                              {Object.entries(statusBreakdown).map(([status, count]) => (
+                                <li key={status} className="text-subtle">
+                                  {status}: {count}
+                                </li>
+                              ))}
+                              {Object.keys(statusBreakdown).length === 0 && (
+                                <li className="text-subtle">No tasks yet.</li>
+                              )}
+                            </ul>
+                          </div>
+                        </div>
+                        <div className="card">
+                          <div className="item-title">Milestone roll-up</div>
+                          <ul className="list" style={{ marginTop: "0.5rem" }}>
+                            {milestoneRollup.length === 0 && (
+                              <li className="text-subtle">Add a milestone to compute progress.</li>
+                            )}
+                            {milestoneRollup.map((milestone) => (
+                              <li key={milestone.milestone_id} className="text-subtle">
+                                <strong>{milestone.name}</strong>: {milestone.percent_complete.toFixed(1)}% complete - {milestone.remaining_effort.toFixed(1)}h remaining
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
                       </div>
-                    )}
-                  </li>
-                );
-              })}
+                    </>
+                  ) : (
+                    <p className="empty-state">Status metrics will appear after tasks are added.</p>
+                  )}
+                </section>
 
-              {!tasks?.length && <p className="empty-state">No tasks yet for this milestone.</p>}
+                <section>
+                  <h2 className="section-title">In-Progress Milestones</h2>
+                  {inProgressMilestones.length > 0 ? (
+                    <ul className="list">
+                      {inProgressMilestones.map((milestone) => (
+                        <li key={`progress-${milestone.milestone_id}`}>
+                          <div
+                            className="card card--selectable"
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => setSelectedMilestone(milestone.milestone_id)}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter" || event.key === " ") {
+                                event.preventDefault();
+                                setSelectedMilestone(milestone.milestone_id);
+                              }
+                            }}
+                          >
+                            {renderCopyButton(milestone.milestone_id)}
+                            <div className="item-title">{milestone.name}</div>
+                            <div className="text-subtle">{milestone.percent_complete.toFixed(1)}% complete</div>
+                            <div className="text-subtle">{milestone.remaining_effort.toFixed(1)}h remaining</div>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="empty-state">No milestones are in progress with active tasks right now.</p>
+                  )}
+                </section>
 
-            </ul>
+                <section>
+                  <h2 className="section-title">Active Tasks {selectedProjectName ? `for ${selectedProjectName}` : ""}</h2>
+                  {activeProjectTasks.length > 0 ? (
+                    <ul className="list">
+                      {activeProjectTasks.map((task) => {
+                        const personaKey = task.persona_required;
+                        const personaLabel = personaKey ? personaNameLookup.get(personaKey) ?? personaKey : "Unassigned";
+                        return (
+                          <li key={`active-${task.id}`}>
+                            <div
+                              className="card card--selectable"
+                              role="button"
+                              tabIndex={0}
+                              onClick={() => setSelectedMilestone(task.milestone_id)}
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter" || event.key === " ") {
+                                  event.preventDefault();
+                                  setSelectedMilestone(task.milestone_id);
+                                }
+                              }}
+                            >
+                              {renderCopyButton(task.id)}
+                              <div className="item-title">{formatTaskLabel(task, milestoneLookup)}</div>
+                              <div className="text-subtle">Status: {task.status}</div>
+                              <div className="text-subtle">Persona: {personaLabel}</div>
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  ) : (
+                    <p className="empty-state">No tasks currently in progress or pending review.</p>
+                  )}
+                </section>
 
-          </>
+                <section>
+                  <h2 className="section-title">Next Suggested Actions</h2>
+                  {nextActions && nextActions.suggestions.length > 0 ? (
+                    <ul className="list">
+                      {nextActions.suggestions.map((suggestion) => (
+                        <li key={suggestion.task_id}>
+                          <div className="card">
+                            <div className="item-title">{suggestion.title}</div>
+                            <div className="text-subtle">{suggestion.reason}</div>
+                            <span className="status-tag">Status: {suggestion.status}</span>
+                            {suggestion.persona_required && (
+                              <span className="status-tag" style={{ marginLeft: "0.5rem" }}>
+                                Persona: {suggestion.persona_required}
+                              </span>
+                            )}
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="empty-state">Add tasks with priority to see suggested actions.</p>
+                  )}
+                </section>
 
-        ) : (
+                <section>
+                  <h2 className="section-title">Milestone Tasks {selectedMilestoneName ? `for ${selectedMilestoneName}` : ""}</h2>
+                  {selectedMilestone ? (
+                    <>
+                      <TaskForm
+                        milestoneId={selectedMilestone}
+                        onSubmit={(values) => createTask.mutate(values)}
+                        submitting={createTask.isPending}
+                      />
+                      <ul className="list" style={{ marginTop: "1rem" }}>
+                        {tasks?.map((task) => {
+                          const isEditing = taskEdit?.id === task.id;
+                          return (
+                            <li key={task.id}>
+                              {isEditing ? (
+                                <form onSubmit={handleTaskEditSubmit} className="card inline-edit-form">
+                                  <input
+                                    type="text"
+                                    value={taskEdit?.title ?? ""}
+                                    onChange={(event) =>
+                                      setTaskEdit((prev) => (prev ? { ...prev, title: event.target.value } : prev))
+                                    }
+                                    className="input"
+                                    placeholder="Task title"
+                                    autoFocus
+                                  />
+                                  <div className="inline-edit-actions">
+                                    <button
+                                      type="submit"
+                                      className="button button--primary"
+                                      disabled={updateTask.isPending || !taskEdit?.title.trim()}
+                                    >
+                                      {updateTask.isPending ? "Saving..." : "Save"}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="button button--secondary"
+                                      onClick={() => setTaskEdit(null)}
+                                      disabled={updateTask.isPending}
+                                    >
+                                      Cancel
+                                    </button>
+                                  </div>
+                                </form>
+                              ) : (
+                                <div
+                                  className="card"
+                                  role="button"
+                                  tabIndex={0}
+                                  onClick={() => setSelectedMilestone(task.milestone_id)}
+                                  onKeyDown={(event) => {
+                                    if (event.key === "Enter" || event.key === " ") {
+                                      event.preventDefault();
+                                      setSelectedMilestone(task.milestone_id);
+                                    }
+                                  }}
+                                >
+                                  <button
+                                    type="button"
+                                    className="icon-button"
+                                    aria-label={`Edit ${task.title}`}
+                                    onClick={(event) => {
+                                      event.preventDefault();
+                                      event.stopPropagation();
+                                      setTaskEdit({
+                                        id: task.id,
+                                        title: task.title,
+                                        milestoneId: task.milestone_id,
+                                        projectId: selectedProject,
+                                        lockVersion: task.lock_version,
+                                      });
+                                    }}
+                                  >
+                                    <svg aria-hidden="true" focusable="false" width="14" height="14" viewBox="0 0 20 20">
+                                      <path
+                                        d="M4 13.5V16h2.5l7.4-7.4-2.5-2.5L4 13.5zm11.7-7.3a.7.7 0 0 0 0-1L13.8 3.3a.7.7 0 0 0-1 0l-1.2 1.2 2.5 2.5 1.1-1.2z"
+                                        fill="currentColor"
+                                      />
+                                    </svg>
+                                  </button>
+                                  <div className="item-title">{task.title}</div>
+                                  {renderCopyButton(task.id)}
+                                  {task.description && <div className="text-subtle">{task.description}</div>}
+                                  <span className="status-tag">Status: {task.status}</span>
+                                </div>
+                              )}
+                            </li>
+                          );
+                        })}
+                        {!tasks?.length && <p className="empty-state">No tasks yet for this milestone.</p>}
+                      </ul>
+                    </>
+                  ) : (
+                    <p className="empty-state">Select a milestone to view tasks.</p>
+                  )}
+                </section>
 
-          <p className="empty-state">Select a milestone to view tasks.</p>
+                <section>
+                  <h2 className="section-title">Personas & Limits</h2>
+                  {projectPersonas && projectPersonas.length > 0 ? (
+                    <ul className="list">
+                      {projectPersonas.map((entry) => (
+                        <li key={entry.persona_key}>
+                          <div className="card">
+                            <div className="item-title">{entry.persona.name}</div>
+                            {entry.persona.description && <p className="text-subtle">{entry.persona.description}</p>}
+                            <div className="text-subtle">Max active tasks: {entry.persona.maximum_active_tasks ?? "unset"}</div>
+                            <div className="text-subtle">Limit per agent: {entry.limit_per_agent ?? "unset"}</div>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="empty-state">No personas assigned to this project yet.</p>
+                  )}
+                </section>
 
-        )}
+                <section>
+                  <h2 className="section-title">Bug Tracker</h2>
+                  <BugForm
+                    projectId={selectedProject!}
+                    tasks={projectTasks ?? []}
+                    milestoneLookup={milestoneLookup}
+                    onSubmit={(values) => createBug.mutate(values)}
+                    submitting={createBug.isPending}
+                  />
+                  {bugsLoading && <p className="empty-state">Loading bugs.</p>}
+                  {bugsError && <ErrorMessage error={bugsError} />}
+                  {bugs && bugs.length > 0 ? (
+                    <BugList
+                      bugs={bugs}
+                      tasks={projectTasks ?? []}
+                      milestoneLookup={milestoneLookup}
+                      onUpdate={(input) => updateBug.mutate(input)}
+                      onDelete={(bugId) => deleteBug.mutate(bugId)}
+                      updating={updateBug.isPending}
+                      deleting={deleteBug.isPending}
+                    />
+                  ) : (
+                    !bugsLoading && <p className="empty-state">No bugs reported for this project.</p>
+                  )}
+                </section>
 
-      </section>
+                <section>
+                  <h2 className="section-title">Activity Log</h2>
+                  <EventForm
+                    projectId={selectedProject!}
+                    milestones={milestones ?? []}
+                    milestoneLookup={milestoneLookup}
+                    tasks={projectTasks ?? []}
+                    onSubmit={(values) => createEvent.mutate(values)}
+                    submitting={createEvent.isPending}
+                  />
+                  {eventsLoading && <p className="empty-state">Loading activity.</p>}
+                  {eventsError && <ErrorMessage error={eventsError} />}
+                  {events && events.length > 0 ? (
+                    <EventList events={events} milestoneLookup={milestoneLookup} taskLookup={taskLookup} />
+                  ) : (
+                    !eventsLoading && <p className="empty-state">No activity logged yet.</p>
+                  )}
+                </section>
 
-      {selectedProject && (
-        <section style={{ marginTop: "2rem" }}>
-          <h2 className="section-title">Bug Tracker</h2>
-
-          <BugForm
-            projectId={selectedProject!}
-            tasks={projectTasks ?? []}
-            milestoneLookup={milestoneLookup}
-            onSubmit={(values) => createBug.mutate(values)}
-            submitting={createBug.isPending}
-          />
-
-          {bugsLoading && <p className="empty-state">Loading bugs.</p>}
-          {bugsError && <ErrorMessage error={bugsError} />}
-
-          {bugs && bugs.length > 0 ? (
-            <BugList
-              bugs={bugs}
-              tasks={projectTasks ?? []}
-              milestoneLookup={milestoneLookup}
-              onUpdate={(input) => updateBug.mutate(input)}
-              onDelete={(bugId) => deleteBug.mutate(bugId)}
-              updating={updateBug.isPending}
-              deleting={deleteBug.isPending}
-            />
-          ) : (
-            !bugsLoading && <p className="empty-state">No bugs reported for this project.</p>
-          )}
-        </section>
-      )}
-
-      {selectedProject && (
-        <section style={{ marginTop: "2rem" }}>
-          <h2 className="section-title">Activity Log</h2>
-
-          <EventForm
-            projectId={selectedProject!}
-            milestones={milestones ?? []}
-            milestoneLookup={milestoneLookup}
-            tasks={projectTasks ?? []}
-            onSubmit={(values) => createEvent.mutate(values)}
-            submitting={createEvent.isPending}
-          />
-
-          {eventsLoading && <p className="empty-state">Loading activity.</p>}
-          {eventsError && <ErrorMessage error={eventsError} />}
-
-          {events && events.length > 0 ? (
-            <EventList events={events} milestoneLookup={milestoneLookup} taskLookup={taskLookup} />
-          ) : (
-            !eventsLoading && <p className="empty-state">No activity logged yet.</p>
-          )}
-        </section>
-      )}
-
-      {selectedProject && (
-        <section style={{ marginTop: "2rem" }}>
-          <h2 className="section-title">Persona Worklist</h2>
-          <div className="card">
-            <div className="form-field" style={{ maxWidth: "240px" }}>
-              <label htmlFor="worklist-persona">Persona</label>
-              <select
-                id="worklist-persona"
-                className="input"
-                value={worklistPersona}
-                onChange={(event) => setWorklistPersona(event.target.value)}
-              >
-                <option value="">All personas</option>
-                {personaOptions.map((value) => (
-                  <option key={value} value={value}>
-                    {personaNameLookup.get(value) ?? value}
-                  </option>
-                ))}
-              </select>
-            </div>
-            {filteredWorklist.length > 0 ? (
-              <ul className="list" style={{ marginTop: "1rem" }}>
-                {filteredWorklist.map((task) => {
-                  const milestoneName = milestoneLookup.get(task.milestone_id);
-                  const personaKey = task.persona_required;
-                  const personaLabel = personaKey ? personaNameLookup.get(personaKey) ?? personaKey : "Unassigned";
-                  return (
-                    <li key={`worklist-${task.id}`}>
-                      <div className="card">
-                        {renderCopyButton(task.id)}
-                        <div className="item-title">{task.title}</div>
-                        {milestoneName && <div className="text-subtle">Milestone: {milestoneName}</div>}
-                        <div className="text-subtle">Status: {task.status}</div>
-                        <div className="text-subtle">Persona: {personaLabel}</div>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            ) : (
-              <p className="empty-state" style={{ marginTop: "1rem" }}>
-                {worklistPersona ? "No tasks awaiting this persona." : "No project tasks yet."}
-              </p>
-            )}
-          </div>
-        </section>
-      )}
-
-      {selectedProject && (
-
-        <section style={{ marginTop: "2rem" }}>
-
-          <h2 className="section-title">Next Suggested Actions</h2>
-
-          {nextActions && nextActions.suggestions.length > 0 ? (
-
-            <ul className="list">
-
-              {nextActions.suggestions.map((suggestion) => (
-
-                <li key={suggestion.task_id}>
-
+                <section>
+                  <h2 className="section-title">Persona Worklist</h2>
                   <div className="card">
-
-                    <div className="item-title">{suggestion.title}</div>
-
-                    <div className="text-subtle">{suggestion.reason}</div>
-
-                    <span className="status-tag">Status: {suggestion.status}</span>
-
-                    {suggestion.persona_required && (
-
-                      <span className="status-tag" style={{ marginLeft: "0.5rem" }}>
-
-                        Persona: {suggestion.persona_required}
-
-                      </span>
-
+                    <div className="form-field" style={{ maxWidth: "240px" }}>
+                      <label htmlFor="worklist-persona">Persona</label>
+                      <select
+                        id="worklist-persona"
+                        className="input"
+                        value={worklistPersona}
+                        onChange={(event) => setWorklistPersona(event.target.value)}
+                      >
+                        <option value="">All personas</option>
+                        {personaOptions.map((value) => (
+                          <option key={value} value={value}>
+                            {personaNameLookup.get(value) ?? value}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    {filteredWorklist.length > 0 ? (
+                      <ul className="list" style={{ marginTop: "1rem" }}>
+                        {filteredWorklist.map((task) => {
+                          const milestoneName = milestoneLookup.get(task.milestone_id);
+                          const personaKey = task.persona_required;
+                          const personaLabel = personaKey ? personaNameLookup.get(personaKey) ?? personaKey : "Unassigned";
+                          return (
+                            <li key={`worklist-${task.id}`}>
+                              <div className="card">
+                                {renderCopyButton(task.id)}
+                                <div className="item-title">{task.title}</div>
+                                {milestoneName && <div className="text-subtle">Milestone: {milestoneName}</div>}
+                                <div className="text-subtle">Status: {task.status}</div>
+                                <div className="text-subtle">Persona: {personaLabel}</div>
+                              </div>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    ) : (
+                      <p className="empty-state" style={{ marginTop: "1rem" }}>
+                        {worklistPersona ? "No tasks awaiting this persona." : "No project tasks yet."}
+                      </p>
                     )}
-
                   </div>
-
-                </li>
-
-              ))}
-
-            </ul>
-
-          ) : (
-
-            <p className="empty-state">Add tasks with priority to see suggested actions.</p>
-
-          )}
-
-        </section>
-
-      )}
-
-    </Layout>
-
+                </section>
+              </>
+            ) : (
+              <section>
+                <h2 className="section-title">Get started</h2>
+                <p className="empty-state">Create or select a project to explore status, milestones, tasks, and next actions.</p>
+              </section>
+            )}
+          </main>
+        </div>
+      </Layout>
   );
+
 
 }
 
