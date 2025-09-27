@@ -47,7 +47,12 @@ class NextActionSuggestion:
     status: str
     persona_required: str | None
     priority_score: float
-    reason: str
+    reasons: list[str]
+    blocker_task_ids: list[UUID]
+
+    @property
+    def primary_reason(self) -> str:
+        return self.reasons[0] if self.reasons else ""
 
 
 def _task_remaining(task: Task) -> float:
@@ -117,14 +122,23 @@ def compute_project_status(session: Session, project: Project) -> ProjectStatus:
     )
 
 
-def select_next_actions(session: Session, project: Project, limit: int = 3) -> list[NextActionSuggestion]:
-    tasks = (
+def select_next_actions(
+    session: Session,
+    project: Project,
+    limit: int = 3,
+    persona: str | None = None,
+) -> list[NextActionSuggestion]:
+    query = (
         session.query(Task)
         .join(Milestone, Task.milestone_id == Milestone.id)
         .filter(Milestone.project_id == project.id)
         .filter(Task.status != "done")
-        .all()
     )
+
+    if persona:
+        query = query.filter(Task.persona_required == persona)
+
+    tasks = query.all()
 
     tasks.sort(
         key=lambda task: (
@@ -136,17 +150,46 @@ def select_next_actions(session: Session, project: Project, limit: int = 3) -> l
 
     suggestions: list[NextActionSuggestion] = []
     for task in tasks[:limit]:
-        reason_parts = []
         priority_score = float(task.priority_score or 0)
-        if priority_score > 0:
-            reason_parts.append(f"Priority score {priority_score:g}")
-        if task.status == "blocked":
-            reason_parts.append("Unblock this task")
-        elif task.status == "not_started":
-            reason_parts.append("Ready to start")
 
-        if not reason_parts:
-            reason_parts.append("Pending task")
+        candidate_reasons: list[str] = []
+        if priority_score > 0:
+            candidate_reasons.append(f"Priority score {priority_score:g}")
+
+        status_normalized = (task.status or "").replace("_", " ").strip()
+        if task.status == "blocked":
+            candidate_reasons.append("Resolve blockers before progressing")
+        elif task.status == "in_progress":
+            candidate_reasons.append("Continue active work")
+        elif task.status == "not_started":
+            candidate_reasons.append("Ready to start")
+        elif status_normalized:
+            candidate_reasons.append(status_normalized.capitalize())
+
+        if task.persona_required and not persona:
+            candidate_reasons.append(f"Needs {task.persona_required}")
+
+        blocker_candidates = getattr(task, "blocked_by", None) or []
+        blocker_task_ids: list[UUID] = []
+        for blocker_id in blocker_candidates:
+            if isinstance(blocker_id, UUID):
+                blocker_task_ids.append(blocker_id)
+            else:
+                try:
+                    blocker_task_ids.append(UUID(str(blocker_id)))
+                except (ValueError, TypeError):
+                    continue
+
+        if blocker_task_ids:
+            candidate_reasons.append("Blocked until dependencies clear")
+
+        reasons: list[str] = []
+        for reason in candidate_reasons:
+            if reason and reason not in reasons:
+                reasons.append(reason)
+
+        if not reasons:
+            reasons.append("Pending task")
 
         suggestions.append(
             NextActionSuggestion(
@@ -155,7 +198,8 @@ def select_next_actions(session: Session, project: Project, limit: int = 3) -> l
                 status=task.status,
                 persona_required=task.persona_required,
                 priority_score=priority_score,
-                reason="; ".join(reason_parts),
+                reasons=reasons,
+                blocker_task_ids=blocker_task_ids,
             )
         )
 

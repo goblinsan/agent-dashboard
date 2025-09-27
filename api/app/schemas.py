@@ -90,6 +90,7 @@ class TaskRead(TaskBase):
     lock_version: int
     created_at: datetime
     updated_at: datetime
+    blocked_by: list[UUID] = Field(default_factory=list)
 
     model_config = {"from_attributes": True}
 
@@ -133,7 +134,9 @@ class NextActionSuggestion(BaseModel):
     status: str
     persona_required: Optional[str] = None
     priority_score: float
-    reason: str
+    reasons: list[str] = Field(default_factory=list)
+    reason: Optional[str] = Field(default=None, description="Deprecated: use reasons[0]")
+    blocker_task_ids: list[UUID] = Field(default_factory=list)
 
 
 class ProjectNextActions(BaseModel):

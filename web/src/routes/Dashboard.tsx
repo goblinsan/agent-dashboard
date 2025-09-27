@@ -1,8 +1,8 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
 import Layout from "../components/Layout";
+import NextActionsPanel from "../components/NextActionsPanel";
 import { CreateMilestoneInput, useCreateMilestone, useMilestones, useUpdateMilestone } from "../hooks/useMilestones";
-import { useProjectNextActions } from "../hooks/useProjectNextActions";
 import { CreateProjectInput, useCreateProject, useProjects, useUpdateProject } from "../hooks/useProjects";
 import { useProjectStatus } from "../hooks/useProjectStatus";
 import { useProjectStatusSummary } from "../hooks/useProjectStatusSummary";
@@ -97,10 +97,6 @@ export default function DashboardRoute() {
 
   const { data: projectPersonas } = useProjectPersonas(selectedProject);
 
-  const { data: nextActions } = useProjectNextActions(selectedProject);
-
-
-
   const createProject = useCreateProject();
 
   const createMilestone = useCreateMilestone();
@@ -177,6 +173,21 @@ export default function DashboardRoute() {
     });
     return Array.from(values).sort();
   }, [projectTasks]);
+
+  const nextActionPersonaOptions = useMemo(() => {
+    const lookup = new Map<string, string>();
+    projectPersonas?.forEach((entry) => {
+      lookup.set(entry.persona_key, entry.persona.name);
+    });
+    projectTasks?.forEach((task) => {
+      if (task.persona_required && !lookup.has(task.persona_required)) {
+        lookup.set(task.persona_required, personaNameLookup.get(task.persona_required) ?? task.persona_required);
+      }
+    });
+    return Array.from(lookup.entries())
+      .map(([value, label]) => ({ value, label }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [projectPersonas, projectTasks, personaNameLookup]);
 
   const filteredWorklist = useMemo(() => {
     if (!projectTasks) {
@@ -722,29 +733,8 @@ export default function DashboardRoute() {
                   )}
                 </section>
 
-                <section>
-                  <h2 className="section-title">Next Suggested Actions</h2>
-                  {nextActions && nextActions.suggestions.length > 0 ? (
-                    <ul className="list">
-                      {nextActions.suggestions.map((suggestion) => (
-                        <li key={suggestion.task_id}>
-                          <div className="card">
-                            <div className="item-title">{suggestion.title}</div>
-                            <div className="text-subtle">{suggestion.reason}</div>
-                            <span className="status-tag">Status: {suggestion.status}</span>
-                            {suggestion.persona_required && (
-                              <span className="status-tag" style={{ marginLeft: "0.5rem" }}>
-                                Persona: {suggestion.persona_required}
-                              </span>
-                            )}
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="empty-state">Add tasks with priority to see suggested actions.</p>
-                  )}
-                </section>
+                <NextActionsPanel projectId={selectedProject} personaOptions={nextActionPersonaOptions} personaNameLookup={personaNameLookup} />
+
 
                 <section>
                   <h2 className="section-title">Milestone Tasks {selectedMilestoneName ? `for ${selectedMilestoneName}` : ""}</h2>

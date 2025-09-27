@@ -89,12 +89,16 @@ def get_project_status(project_id: UUID, db: Session = Depends(get_session)) -> 
 
 
 @router.get("/{project_id}/next-action", response_model=ProjectNextActions)
-def get_project_next_actions(project_id: UUID, db: Session = Depends(get_session)) -> ProjectNextActions:
+def get_project_next_actions(
+    project_id: UUID,
+    persona: Optional[str] = None,
+    db: Session = Depends(get_session),
+) -> ProjectNextActions:
     project = db.get(Project, project_id)
     if project is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
 
-    suggestions = select_next_actions(db, project)
+    suggestions = select_next_actions(db, project, persona=persona)
     return ProjectNextActions(
         project_id=project.id,
         suggestions=[
@@ -104,7 +108,9 @@ def get_project_next_actions(project_id: UUID, db: Session = Depends(get_session
                 "status": suggestion.status,
                 "persona_required": suggestion.persona_required,
                 "priority_score": suggestion.priority_score,
-                "reason": suggestion.reason,
+                "reasons": suggestion.reasons,
+                "reason": suggestion.primary_reason or None,
+                "blocker_task_ids": suggestion.blocker_task_ids,
             }
             for suggestion in suggestions
         ],

@@ -8,7 +8,9 @@ export type NextAction = {
   status: string;
   persona_required?: string | null;
   priority_score: number;
-  reason: string;
+  reasons: string[];
+  reason?: string | null;
+  blocker_task_ids?: string[];
 };
 
 export type ProjectNextActions = {
@@ -16,11 +18,17 @@ export type ProjectNextActions = {
   suggestions: NextAction[];
 };
 
-export function useProjectNextActions(projectId?: string) {
+export function useProjectNextActions(projectId?: string, persona?: string) {
   return useQuery({
     enabled: Boolean(projectId),
-    queryKey: ["project", projectId, "next-actions"],
-    queryFn: () => api<ProjectNextActions>(`/v1/projects/${projectId}/next-action`),
+    queryKey: ["project", projectId, "next-actions", persona ?? "all"],
+    queryFn: () => {
+      if (!projectId) {
+        throw new Error("Project id is required to fetch next actions");
+      }
+      const personaParam = persona ? `?persona=${encodeURIComponent(persona)}` : "";
+      return api<ProjectNextActions>(`/v1/projects/${projectId}/next-action${personaParam}`);
+    },
     staleTime: 1000 * 30,
   });
 }

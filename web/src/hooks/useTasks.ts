@@ -12,6 +12,17 @@ export type Task = {
   persona_required?: string | null;
   effort_estimate?: number;
   effort_spent?: number;
+  blocked_by?: string[];
+};
+
+export type TaskDetail = Task & {
+  phase_id?: string | null;
+  parent_task_id?: string | null;
+  owner?: string | null;
+  acceptance_criteria?: string | null;
+  priority_score?: number;
+  risk_level?: string;
+  severity?: string;
 };
 
 export type CreateTaskInput = {
@@ -30,6 +41,24 @@ export type UpdateTaskInput = {
   title?: string;
   description?: string;
 };
+
+export function fetchTask(taskId: string) {
+  return api<TaskDetail>(`/v1/tasks/${taskId}`);
+}
+
+export function useTask(taskId?: string) {
+  return useQuery({
+    enabled: Boolean(taskId),
+    queryKey: ["task", taskId],
+    queryFn: () => {
+      if (!taskId) {
+        throw new Error("Task id is required");
+      }
+      return fetchTask(taskId);
+    },
+    staleTime: 1000 * 30,
+  });
+}
 
 export function useTasks(milestoneId?: string) {
   return useQuery({
