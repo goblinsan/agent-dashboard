@@ -16,7 +16,7 @@ from app.schemas import (
     ProjectStatusSummary,
     ProjectUpdate,
 )
-from app.services import compute_project_status, select_next_actions, generate_project_summary
+from app.project_services import compute_project_status, select_next_actions, generate_project_summary
 
 router = APIRouter(prefix="/v1/projects", tags=["projects"])
 

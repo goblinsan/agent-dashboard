@@ -8,13 +8,14 @@ Create Date: ${create_date}
 from __future__ import annotations
 
 from alembic import op
+from sqlalchemy.dialects import postgresql
 import sqlalchemy as sa
 
 
-revision = "${up_revision}"
-down_revision = ${down_revision | repr}
-branch_labels = None
-depends_on = None
+revision = ${repr(up_revision)}
+down_revision = ${repr(down_revision)}
+branch_labels = ${repr(branch_labels)}
+depends_on = ${repr(depends_on)}
 
 
 def upgrade() -> None:

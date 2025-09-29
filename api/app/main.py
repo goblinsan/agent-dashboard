@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .routes import bugs, events, milestones, personas, projects, tasks, well_known
+from app.routes.context import router as context_router
 
 app = FastAPI(title="MADB API", version="0.1.0")
 
@@ -28,6 +29,7 @@ app.include_router(tasks.router)
 app.include_router(events.router)
 app.include_router(bugs.router)
 app.include_router(personas.router)
+app.include_router(context_router)
 
 
 def run() -> None:
