@@ -268,3 +268,35 @@ class EventLogRead(EventLogBase):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class ContextSnapshotBase(BaseModel):
+    repo_id: str
+    branch: Optional[str] = None
+    workflow_id: Optional[str] = None
+    snapshot_path: str
+    summary_path: str
+    files_ndjson_path: Optional[str] = None
+    totals_files: int
+    totals_bytes: int
+    totals_lines: int
+    components_json: Optional[Any] = None
+    hotspots_json: Optional[Any] = None
+
+class ContextSnapshotCreate(ContextSnapshotBase):
+    pass
+
+class ContextSnapshotRead(ContextSnapshotBase):
+    id: int
+    created_at: datetime
+
+    class Config:
+        orm_mode = True
+
+class ContextIndexRead(BaseModel):
+    repo_id: str
+    latest_snapshot_id: int
+    updated_at: datetime
+
+    class Config:
+        orm_mode = True
