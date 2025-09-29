@@ -1,5 +1,12 @@
 # ---- Root repo ignores (FastAPI + React + Docker) ----
 
+# Multi-agent artifacts
+.ma/**
+!.ma/context/
+.ma/context/*
+!.ma/context/snapshot.json
+!.ma/context/summary.md
+
 # OS cruft
 .DS_Store
 Thumbs.db
