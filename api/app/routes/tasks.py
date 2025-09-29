@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.db import get_session
-from app.models import Milestone, Phase, Task
+from app.models import Milestone, Phase, Task, EventLog
 from app.schemas import TaskCreate, TaskPatch, TaskRead
 
 router = APIRouter(prefix="/v1/tasks", tags=["tasks"])
@@ -84,10 +84,31 @@ def update_task(task_id: UUID, payload: TaskPatch, db: Session = Depends(get_ses
     if "parent_task_id" in update_data:
         _ensure_parent_task(db, update_data["parent_task_id"])
 
+    old_status = task.status
     for field, value in update_data.items():
         setattr(task, field, value)
+
+    status_changed = "status" in update_data and update_data["status"] != old_status
 
     task.lock_version += 1
     db.commit()
     db.refresh(task)
+
+    # Log event if status changed
+    if status_changed:
+        event = EventLog(
+            project_id=task.milestone.project_id if task.milestone else None,
+            milestone_id=task.milestone_id,
+            task_id=task.id,
+            event_type="status_change",
+            entity_type="task",
+            entity_id=task.id,
+            summary=f"Task status changed from '{old_status}' to '{task.status}'",
+            details=None,
+            created_by=None,
+            payload={"from": old_status, "to": task.status},
+        )
+        db.add(event)
+        db.commit()
+
     return TaskRead.model_validate(task)

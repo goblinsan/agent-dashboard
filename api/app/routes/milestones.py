@@ -50,9 +50,31 @@ def update_milestone(milestone_id: UUID, payload: MilestoneUpdate, db: Session =
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Milestone not found")
 
     update_data = payload.model_dump(exclude_unset=True)
+    old_status = milestone.status
     for field, value in update_data.items():
         setattr(milestone, field, value)
 
+    status_changed = "status" in update_data and update_data["status"] != old_status
+
     db.commit()
     db.refresh(milestone)
+
+    # Log event if status changed
+    if status_changed:
+        from app.models import EventLog
+        event = EventLog(
+            project_id=milestone.project_id,
+            milestone_id=milestone.id,
+            task_id=None,
+            event_type="status_change",
+            entity_type="milestone",
+            entity_id=milestone.id,
+            summary=f"Milestone status changed from '{old_status}' to '{milestone.status}'",
+            details=None,
+            created_by=None,
+            payload={"from": old_status, "to": milestone.status},
+        )
+        db.add(event)
+        db.commit()
+
     return MilestoneRead.model_validate(milestone)

@@ -32,6 +32,21 @@ Task ID: 2f012a91-2b2b-4e36-b27d-31ffe1cdc0d2
  - Projects list → /projects/:id
  - Task detail → /tasks/:id
 
+--------------------
+The project dashboard is running the dashboard api at http://localhost:8080/
+In progress Milestone : adc16227-d589-4b0a-86fe-5ad60405339f
+
+Mark the last task as done. task id: 2f012a91-2b2b-4e36-b27d-31ffe1cdc0d2
+Mark the next task as In Progress and begin the implementation. task id : 584e0eb6-6c94-43a3-b27e-f16013364116
+
+Persona: LeadEngineer
+Goal: Build a performant, filterable, append-only Activity / Event Stream page that lists events from the backend and updates as new events arrive. Ship a minimal vertical slice first; keep the design and types easy to extend.
+
+
+
+
+--------------------------
+
 Using the running dashboard api at http://localhost:8080/
 Update the project id: c86f7594-ff72-486c-970e-913322ccdbd0
 with the personas listed in docs\personas.json

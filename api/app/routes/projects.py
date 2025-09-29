@@ -54,11 +54,33 @@ def update_project(project_id: UUID, payload: ProjectUpdate, db: Session = Depen
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
 
     update_data = payload.model_dump(exclude_unset=True)
+    old_status = project.status
     for field, value in update_data.items():
         setattr(project, field, value)
 
+    status_changed = "status" in update_data and update_data["status"] != old_status
+
     db.commit()
     db.refresh(project)
+
+    # Log event if status changed
+    if status_changed:
+        from app.models import EventLog
+        event = EventLog(
+            project_id=project.id,
+            milestone_id=None,
+            task_id=None,
+            event_type="status_change",
+            entity_type="project",
+            entity_id=project.id,
+            summary=f"Project status changed from '{old_status}' to '{project.status}'",
+            details=None,
+            created_by=None,
+            payload={"from": old_status, "to": project.status},
+        )
+        db.add(event)
+        db.commit()
+
     return ProjectRead.model_validate(project)
 
 
