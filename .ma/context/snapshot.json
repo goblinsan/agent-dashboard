@@ -1,0 +1,611 @@
+{
+  "repo": "/mnt/e/code/agent-dashboard",
+  "generated_at": "2025-09-28T23:52:42.486Z",
+  "totals": {
+    "files": 37,
+    "bytes": 134654,
+    "lines": 4631
+  },
+  "components": [
+    {
+      "component": "api",
+      "totals": {
+        "files": 21,
+        "bytes": 65173,
+        "lines": 1818
+      },
+      "largest": [
+        {
+          "path": "api/app/models.py",
+          "bytes": 10325,
+          "mtime": 1759087193588.2607,
+          "lines": 180,
+          "sha1": "655cec810a71cdb11f7c9da65c13cead2e522e17"
+        },
+        {
+          "path": "api/app/scripts/import_execution_plan.py",
+          "bytes": 9786,
+          "mtime": 1759087193591.2632,
+          "lines": 286,
+          "sha1": "07ce5250db97a598c3a4e84a5625ac0e1fb022f5"
+        },
+        {
+          "path": "api/app/services.py",
+          "bytes": 5846,
+          "mtime": 1759087193592.2617,
+          "lines": 194,
+          "sha1": "630199781acea10f19c541b82e9c15f193dd2892"
+        },
+        {
+          "path": "api/alembic/versions/202409230001_initial_core_tables.py",
+          "bytes": 5776,
+          "mtime": 1759087193586.2532,
+          "lines": 106,
+          "sha1": "65ccd2d8a43b66bbd6ad829e8e08d524f95e620f"
+        },
+        {
+          "path": "api/app/schemas.py",
+          "bytes": 5028,
+          "mtime": 1759087193591.2632,
+          "lines": 225,
+          "sha1": "1322841fd0badcd0d8d681371616fad021df3ef7"
+        },
+        {
+          "path": "api/app/routes/projects.py",
+          "bytes": 4829,
+          "mtime": 1759087193589.2627,
+          "lines": 126,
+          "sha1": "01b6f1e6a1c99ba49323f95cb4115f64495a4d2d"
+        },
+        {
+          "path": "api/app/routes/tasks.py",
+          "bytes": 3423,
+          "mtime": 1759087193590.2664,
+          "lines": 94,
+          "sha1": "37b9f7267ee1f2db357b79552f19b927ad9f1c7a"
+        },
+        {
+          "path": "api/app/routes/personas.py",
+          "bytes": 3387,
+          "mtime": 1759087193589.2627,
+          "lines": 102,
+          "sha1": "6a3f0b8897a5701fabef75f4fef857524ac6c58d"
+        },
+        {
+          "path": "api/app/routes/events.py",
+          "bytes": 3004,
+          "mtime": 1759087193589.2627,
+          "lines": 84,
+          "sha1": "21109009c9b5b3972198b3407da58a91e3388b96"
+        },
+        {
+          "path": "api/app/routes/bugs.py",
+          "bytes": 2976,
+          "mtime": 1759087193588.2607,
+          "lines": 82,
+          "sha1": "13d08eb29cf07626681e9cc9205ce6b47e5fbf99"
+        }
+      ],
+      "longest": [
+        {
+          "path": "api/app/scripts/import_execution_plan.py",
+          "bytes": 9786,
+          "mtime": 1759087193591.2632,
+          "lines": 286,
+          "sha1": "07ce5250db97a598c3a4e84a5625ac0e1fb022f5"
+        },
+        {
+          "path": "api/app/schemas.py",
+          "bytes": 5028,
+          "mtime": 1759087193591.2632,
+          "lines": 225,
+          "sha1": "1322841fd0badcd0d8d681371616fad021df3ef7"
+        },
+        {
+          "path": "api/app/services.py",
+          "bytes": 5846,
+          "mtime": 1759087193592.2617,
+          "lines": 194,
+          "sha1": "630199781acea10f19c541b82e9c15f193dd2892"
+        },
+        {
+          "path": "api/app/models.py",
+          "bytes": 10325,
+          "mtime": 1759087193588.2607,
+          "lines": 180,
+          "sha1": "655cec810a71cdb11f7c9da65c13cead2e522e17"
+        },
+        {
+          "path": "api/app/routes/projects.py",
+          "bytes": 4829,
+          "mtime": 1759087193589.2627,
+          "lines": 126,
+          "sha1": "01b6f1e6a1c99ba49323f95cb4115f64495a4d2d"
+        },
+        {
+          "path": "api/alembic/versions/202409230001_initial_core_tables.py",
+          "bytes": 5776,
+          "mtime": 1759087193586.2532,
+          "lines": 106,
+          "sha1": "65ccd2d8a43b66bbd6ad829e8e08d524f95e620f"
+        },
+        {
+          "path": "api/app/routes/personas.py",
+          "bytes": 3387,
+          "mtime": 1759087193589.2627,
+          "lines": 102,
+          "sha1": "6a3f0b8897a5701fabef75f4fef857524ac6c58d"
+        },
+        {
+          "path": "api/app/routes/tasks.py",
+          "bytes": 3423,
+          "mtime": 1759087193590.2664,
+          "lines": 94,
+          "sha1": "37b9f7267ee1f2db357b79552f19b927ad9f1c7a"
+        },
+        {
+          "path": "api/app/routes/events.py",
+          "bytes": 3004,
+          "mtime": 1759087193589.2627,
+          "lines": 84,
+          "sha1": "21109009c9b5b3972198b3407da58a91e3388b96"
+        },
+        {
+          "path": "api/app/routes/bugs.py",
+          "bytes": 2976,
+          "mtime": 1759087193588.2607,
+          "lines": 82,
+          "sha1": "13d08eb29cf07626681e9cc9205ce6b47e5fbf99"
+        }
+      ]
+    },
+    {
+      "component": "web",
+      "totals": {
+        "files": 16,
+        "bytes": 69481,
+        "lines": 2813
+      },
+      "largest": [
+        {
+          "path": "web/src/routes/Dashboard.tsx",
+          "bytes": 51587,
+          "mtime": 1759087193600.262,
+          "lines": 1997,
+          "sha1": "38df2abd9e1e03dde747220ff87bd3574249e06a"
+        },
+        {
+          "path": "web/src/main.css",
+          "bytes": 5095,
+          "mtime": 1759087193600.262,
+          "lines": 331,
+          "sha1": "4e6bd3b363dcf47dc4f7852240b09c01d9b5f33d"
+        },
+        {
+          "path": "web/src/hooks/useTasks.ts",
+          "bytes": 2191,
+          "mtime": 1759087193599.2605,
+          "lines": 76,
+          "sha1": "5f6135d6a3e5c19be8c5788311f3a23e25f96e00"
+        },
+        {
+          "path": "web/src/hooks/useBugs.ts",
+          "bytes": 1889,
+          "mtime": 1759087193598.261,
+          "lines": 77,
+          "sha1": "6a6aaa356cce9ad22a8854e762a49ba86a3d02ee"
+        },
+        {
+          "path": "web/src/hooks/useMilestones.ts",
+          "bytes": 1352,
+          "mtime": 1759087193598.261,
+          "lines": 37,
+          "sha1": "5086db965cbe3195d8a6594b19000383ad2977e0"
+        },
+        {
+          "path": "web/src/hooks/useProjects.ts",
+          "bytes": 1142,
+          "mtime": 1759087193599.2605,
+          "lines": 35,
+          "sha1": "631b577d1d855e3708f3ae80003d57490d06bb06"
+        },
+        {
+          "path": "web/src/hooks/useEvents.ts",
+          "bytes": 1101,
+          "mtime": 1759087193598.261,
+          "lines": 45,
+          "sha1": "2804d411f2af62a48ba2247dc7231f0b776a25ed"
+        },
+        {
+          "path": "web/src/api/client.ts",
+          "bytes": 1013,
+          "mtime": 1759087193597.2612,
+          "lines": 43,
+          "sha1": "211455fe619ba0195a42b939ea177e404f555dec"
+        },
+        {
+          "path": "web/src/hooks/usePersonas.ts",
+          "bytes": 794,
+          "mtime": 1759087193598.261,
+          "lines": 35,
+          "sha1": "c47ba849d991b0cc096be4bca9871d21caa213e4"
+        },
+        {
+          "path": "web/src/hooks/useProjectStatus.ts",
+          "bytes": 741,
+          "mtime": 1759087193599.2605,
+          "lines": 30,
+          "sha1": "68be990923d63fb58526d82dfc31d72d5bb13e4b"
+        }
+      ],
+      "longest": [
+        {
+          "path": "web/src/routes/Dashboard.tsx",
+          "bytes": 51587,
+          "mtime": 1759087193600.262,
+          "lines": 1997,
+          "sha1": "38df2abd9e1e03dde747220ff87bd3574249e06a"
+        },
+        {
+          "path": "web/src/main.css",
+          "bytes": 5095,
+          "mtime": 1759087193600.262,
+          "lines": 331,
+          "sha1": "4e6bd3b363dcf47dc4f7852240b09c01d9b5f33d"
+        },
+        {
+          "path": "web/src/hooks/useBugs.ts",
+          "bytes": 1889,
+          "mtime": 1759087193598.261,
+          "lines": 77,
+          "sha1": "6a6aaa356cce9ad22a8854e762a49ba86a3d02ee"
+        },
+        {
+          "path": "web/src/hooks/useTasks.ts",
+          "bytes": 2191,
+          "mtime": 1759087193599.2605,
+          "lines": 76,
+          "sha1": "5f6135d6a3e5c19be8c5788311f3a23e25f96e00"
+        },
+        {
+          "path": "web/src/hooks/useEvents.ts",
+          "bytes": 1101,
+          "mtime": 1759087193598.261,
+          "lines": 45,
+          "sha1": "2804d411f2af62a48ba2247dc7231f0b776a25ed"
+        },
+        {
+          "path": "web/src/api/client.ts",
+          "bytes": 1013,
+          "mtime": 1759087193597.2612,
+          "lines": 43,
+          "sha1": "211455fe619ba0195a42b939ea177e404f555dec"
+        },
+        {
+          "path": "web/src/hooks/useMilestones.ts",
+          "bytes": 1352,
+          "mtime": 1759087193598.261,
+          "lines": 37,
+          "sha1": "5086db965cbe3195d8a6594b19000383ad2977e0"
+        },
+        {
+          "path": "web/src/hooks/usePersonas.ts",
+          "bytes": 794,
+          "mtime": 1759087193598.261,
+          "lines": 35,
+          "sha1": "c47ba849d991b0cc096be4bca9871d21caa213e4"
+        },
+        {
+          "path": "web/src/hooks/useProjects.ts",
+          "bytes": 1142,
+          "mtime": 1759087193599.2605,
+          "lines": 35,
+          "sha1": "631b577d1d855e3708f3ae80003d57490d06bb06"
+        },
+        {
+          "path": "web/src/hooks/useProjectStatus.ts",
+          "bytes": 741,
+          "mtime": 1759087193599.2605,
+          "lines": 30,
+          "sha1": "68be990923d63fb58526d82dfc31d72d5bb13e4b"
+        }
+      ]
+    },
+    {
+      "component": "alembic",
+      "totals": {
+        "files": 0,
+        "bytes": 0,
+        "lines": 0
+      },
+      "largest": [],
+      "longest": []
+    }
+  ],
+  "hotspots": {
+    "largest_files": [
+      {
+        "path": "web/src/routes/Dashboard.tsx",
+        "bytes": 51587,
+        "mtime": 1759087193600.262,
+        "lines": 1997,
+        "sha1": "38df2abd9e1e03dde747220ff87bd3574249e06a"
+      },
+      {
+        "path": "api/app/models.py",
+        "bytes": 10325,
+        "mtime": 1759087193588.2607,
+        "lines": 180,
+        "sha1": "655cec810a71cdb11f7c9da65c13cead2e522e17"
+      },
+      {
+        "path": "api/app/scripts/import_execution_plan.py",
+        "bytes": 9786,
+        "mtime": 1759087193591.2632,
+        "lines": 286,
+        "sha1": "07ce5250db97a598c3a4e84a5625ac0e1fb022f5"
+      },
+      {
+        "path": "api/app/services.py",
+        "bytes": 5846,
+        "mtime": 1759087193592.2617,
+        "lines": 194,
+        "sha1": "630199781acea10f19c541b82e9c15f193dd2892"
+      },
+      {
+        "path": "api/alembic/versions/202409230001_initial_core_tables.py",
+        "bytes": 5776,
+        "mtime": 1759087193586.2532,
+        "lines": 106,
+        "sha1": "65ccd2d8a43b66bbd6ad829e8e08d524f95e620f"
+      },
+      {
+        "path": "web/src/main.css",
+        "bytes": 5095,
+        "mtime": 1759087193600.262,
+        "lines": 331,
+        "sha1": "4e6bd3b363dcf47dc4f7852240b09c01d9b5f33d"
+      },
+      {
+        "path": "api/app/schemas.py",
+        "bytes": 5028,
+        "mtime": 1759087193591.2632,
+        "lines": 225,
+        "sha1": "1322841fd0badcd0d8d681371616fad021df3ef7"
+      },
+      {
+        "path": "api/app/routes/projects.py",
+        "bytes": 4829,
+        "mtime": 1759087193589.2627,
+        "lines": 126,
+        "sha1": "01b6f1e6a1c99ba49323f95cb4115f64495a4d2d"
+      },
+      {
+        "path": "api/app/routes/tasks.py",
+        "bytes": 3423,
+        "mtime": 1759087193590.2664,
+        "lines": 94,
+        "sha1": "37b9f7267ee1f2db357b79552f19b927ad9f1c7a"
+      },
+      {
+        "path": "api/app/routes/personas.py",
+        "bytes": 3387,
+        "mtime": 1759087193589.2627,
+        "lines": 102,
+        "sha1": "6a3f0b8897a5701fabef75f4fef857524ac6c58d"
+      },
+      {
+        "path": "api/app/routes/events.py",
+        "bytes": 3004,
+        "mtime": 1759087193589.2627,
+        "lines": 84,
+        "sha1": "21109009c9b5b3972198b3407da58a91e3388b96"
+      },
+      {
+        "path": "api/app/routes/bugs.py",
+        "bytes": 2976,
+        "mtime": 1759087193588.2607,
+        "lines": 82,
+        "sha1": "13d08eb29cf07626681e9cc9205ce6b47e5fbf99"
+      },
+      {
+        "path": "api/app/routes/milestones.py",
+        "bytes": 2324,
+        "mtime": 1759087193589.2627,
+        "lines": 59,
+        "sha1": "02f6fb3386cecdb16d3d411031a58640fbf3ebb0"
+      },
+      {
+        "path": "web/src/hooks/useTasks.ts",
+        "bytes": 2191,
+        "mtime": 1759087193599.2605,
+        "lines": 76,
+        "sha1": "5f6135d6a3e5c19be8c5788311f3a23e25f96e00"
+      },
+      {
+        "path": "web/src/hooks/useBugs.ts",
+        "bytes": 1889,
+        "mtime": 1759087193598.261,
+        "lines": 77,
+        "sha1": "6a6aaa356cce9ad22a8854e762a49ba86a3d02ee"
+      },
+      {
+        "path": "api/alembic/versions/202409230002_personas_registry.py",
+        "bytes": 1710,
+        "mtime": 1759087193586.2532,
+        "lines": 47,
+        "sha1": "0a0c6e5990232205eeeaf28ea37d1c32ffec085d"
+      },
+      {
+        "path": "api/alembic/versions/202409230004_event_log.py",
+        "bytes": 1563,
+        "mtime": 1759087193587.261,
+        "lines": 42,
+        "sha1": "d1aeb55a4381baae2397c88deb16c747f80c2405"
+      },
+      {
+        "path": "api/alembic/versions/202409230003_bug_tracker.py",
+        "bytes": 1412,
+        "mtime": 1759087193587.261,
+        "lines": 40,
+        "sha1": "59fe1c18f41ccd03f9d299ede2fc1cb2ea8c7e52"
+      },
+      {
+        "path": "web/src/hooks/useMilestones.ts",
+        "bytes": 1352,
+        "mtime": 1759087193598.261,
+        "lines": 37,
+        "sha1": "5086db965cbe3195d8a6594b19000383ad2977e0"
+      },
+      {
+        "path": "api/alembic/env.py",
+        "bytes": 1264,
+        "mtime": 1759087193586.2532,
+        "lines": 54,
+        "sha1": "dd49aec794d73560a0637c6754b524f1dccf8189"
+      }
+    ],
+    "longest_files": [
+      {
+        "path": "web/src/routes/Dashboard.tsx",
+        "bytes": 51587,
+        "mtime": 1759087193600.262,
+        "lines": 1997,
+        "sha1": "38df2abd9e1e03dde747220ff87bd3574249e06a"
+      },
+      {
+        "path": "web/src/main.css",
+        "bytes": 5095,
+        "mtime": 1759087193600.262,
+        "lines": 331,
+        "sha1": "4e6bd3b363dcf47dc4f7852240b09c01d9b5f33d"
+      },
+      {
+        "path": "api/app/scripts/import_execution_plan.py",
+        "bytes": 9786,
+        "mtime": 1759087193591.2632,
+        "lines": 286,
+        "sha1": "07ce5250db97a598c3a4e84a5625ac0e1fb022f5"
+      },
+      {
+        "path": "api/app/schemas.py",
+        "bytes": 5028,
+        "mtime": 1759087193591.2632,
+        "lines": 225,
+        "sha1": "1322841fd0badcd0d8d681371616fad021df3ef7"
+      },
+      {
+        "path": "api/app/services.py",
+        "bytes": 5846,
+        "mtime": 1759087193592.2617,
+        "lines": 194,
+        "sha1": "630199781acea10f19c541b82e9c15f193dd2892"
+      },
+      {
+        "path": "api/app/models.py",
+        "bytes": 10325,
+        "mtime": 1759087193588.2607,
+        "lines": 180,
+        "sha1": "655cec810a71cdb11f7c9da65c13cead2e522e17"
+      },
+      {
+        "path": "api/app/routes/projects.py",
+        "bytes": 4829,
+        "mtime": 1759087193589.2627,
+        "lines": 126,
+        "sha1": "01b6f1e6a1c99ba49323f95cb4115f64495a4d2d"
+      },
+      {
+        "path": "api/alembic/versions/202409230001_initial_core_tables.py",
+        "bytes": 5776,
+        "mtime": 1759087193586.2532,
+        "lines": 106,
+        "sha1": "65ccd2d8a43b66bbd6ad829e8e08d524f95e620f"
+      },
+      {
+        "path": "api/app/routes/personas.py",
+        "bytes": 3387,
+        "mtime": 1759087193589.2627,
+        "lines": 102,
+        "sha1": "6a3f0b8897a5701fabef75f4fef857524ac6c58d"
+      },
+      {
+        "path": "api/app/routes/tasks.py",
+        "bytes": 3423,
+        "mtime": 1759087193590.2664,
+        "lines": 94,
+        "sha1": "37b9f7267ee1f2db357b79552f19b927ad9f1c7a"
+      },
+      {
+        "path": "api/app/routes/events.py",
+        "bytes": 3004,
+        "mtime": 1759087193589.2627,
+        "lines": 84,
+        "sha1": "21109009c9b5b3972198b3407da58a91e3388b96"
+      },
+      {
+        "path": "api/app/routes/bugs.py",
+        "bytes": 2976,
+        "mtime": 1759087193588.2607,
+        "lines": 82,
+        "sha1": "13d08eb29cf07626681e9cc9205ce6b47e5fbf99"
+      },
+      {
+        "path": "web/src/hooks/useBugs.ts",
+        "bytes": 1889,
+        "mtime": 1759087193598.261,
+        "lines": 77,
+        "sha1": "6a6aaa356cce9ad22a8854e762a49ba86a3d02ee"
+      },
+      {
+        "path": "web/src/hooks/useTasks.ts",
+        "bytes": 2191,
+        "mtime": 1759087193599.2605,
+        "lines": 76,
+        "sha1": "5f6135d6a3e5c19be8c5788311f3a23e25f96e00"
+      },
+      {
+        "path": "api/app/routes/milestones.py",
+        "bytes": 2324,
+        "mtime": 1759087193589.2627,
+        "lines": 59,
+        "sha1": "02f6fb3386cecdb16d3d411031a58640fbf3ebb0"
+      },
+      {
+        "path": "api/alembic/env.py",
+        "bytes": 1264,
+        "mtime": 1759087193586.2532,
+        "lines": 54,
+        "sha1": "dd49aec794d73560a0637c6754b524f1dccf8189"
+      },
+      {
+        "path": "api/alembic/versions/202409230002_personas_registry.py",
+        "bytes": 1710,
+        "mtime": 1759087193586.2532,
+        "lines": 47,
+        "sha1": "0a0c6e5990232205eeeaf28ea37d1c32ffec085d"
+      },
+      {
+        "path": "web/src/hooks/useEvents.ts",
+        "bytes": 1101,
+        "mtime": 1759087193598.261,
+        "lines": 45,
+        "sha1": "2804d411f2af62a48ba2247dc7231f0b776a25ed"
+      },
+      {
+        "path": "web/src/api/client.ts",
+        "bytes": 1013,
+        "mtime": 1759087193597.2612,
+        "lines": 43,
+        "sha1": "211455fe619ba0195a42b939ea177e404f555dec"
+      },
+      {
+        "path": "api/alembic/versions/202409230004_event_log.py",
+        "bytes": 1563,
+        "mtime": 1759087193587.261,
+        "lines": 42,
+        "sha1": "d1aeb55a4381baae2397c88deb16c747f80c2405"
+      }
+    ]
+  }
+}
