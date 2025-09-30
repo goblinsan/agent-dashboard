@@ -6,7 +6,6 @@ if [ "$#" -eq 0 ]; then
 fi
 
 #echo "Running Alembic migrations..."
-poetry run alembic revision --autogenerate -m "Initial schema"
 poetry run alembic upgrade head
 
 echo "Starting MADB API..."
