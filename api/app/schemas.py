@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Optional
+from typing import Any, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -12,6 +12,10 @@ class ProjectBase(BaseModel):
     goal: Optional[str] = None
     direction: Optional[str] = None
     parent_id: Optional[UUID] = Field(default=None, description="Parent project id if nested")
+    repository_path: Optional[str] = Field(
+        default=None,
+        description="Filesystem path to the project's git repository",
+    )
 
 
 class ProjectCreate(ProjectBase):
@@ -31,6 +35,7 @@ class ProjectUpdate(BaseModel):
     goal: Optional[str] = None
     direction: Optional[str] = None
     parent_id: Optional[UUID] = None
+    repository_path: Optional[str] = None
 
 
 class MilestoneBase(BaseModel):
@@ -244,13 +249,11 @@ class ContextSnapshotRead(ContextSnapshotBase):
     id: int
     created_at: datetime
 
-    class Config:
-        orm_mode = True
+    model_config = {"from_attributes": True}
 
 class ContextIndexRead(BaseModel):
     repo_id: str
     latest_snapshot_id: int
     updated_at: datetime
 
-    class Config:
-        orm_mode = True
+    model_config = {"from_attributes": True}

@@ -1,12 +1,16 @@
 import os
+from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 
 from .routes import bugs, events, milestones, personas, projects, tasks, well_known
 from app.routes.context import router as context_router
 
 app = FastAPI(title="MADB API", version="0.1.0")
+
+OPENAPI_FILE = Path(__file__).resolve().parent / "openapi.yml"
 
 raw_origins = os.getenv("CORS_ALLOW_ORIGINS", "*")
 if raw_origins == "*":
@@ -30,6 +34,13 @@ app.include_router(events.router)
 app.include_router(bugs.router)
 app.include_router(personas.router)
 app.include_router(context_router)
+
+
+@app.get("/openapi.yml", include_in_schema=False)
+def serve_openapi_yaml() -> FileResponse:
+    if not OPENAPI_FILE.exists():
+        raise HTTPException(status_code=404, detail="OpenAPI document not generated")
+    return FileResponse(str(OPENAPI_FILE), media_type="application/yaml", filename="openapi.yml")
 
 
 def run() -> None:
