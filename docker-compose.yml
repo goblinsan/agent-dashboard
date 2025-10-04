@@ -7,21 +7,45 @@ services:
       POSTGRES_USER: madb
       POSTGRES_PASSWORD: madb
     ports: ["5432:5432"]
+    # Limit memory for this container to 1GB
+    mem_limit: 1g
+    deploy:
+      resources:
+        limits:
+          memory: 1g
     volumes:
       - db_data:/var/lib/postgresql/data
   redis:
     image: redis:7-alpine
     ports: ["6379:6379"]
+    # Limit memory for Redis to 8GB
+    mem_limit: 8g
+    deploy:
+      resources:
+        limits:
+          memory: 8g
   api:
     build: ./api
     env_file: .env
     depends_on: [db, redis]
     ports: ["8080:8080"]
+    # Limit API container to 1GB
+    mem_limit: 1g
+    deploy:
+      resources:
+        limits:
+          memory: 1g
   web:
     build: ./web
     environment:
       - VITE_API_URL=http://localhost:8080
     depends_on: [api]
     ports: ["5173:5173"]
+    # Limit web container to 1GB
+    mem_limit: 1g
+    deploy:
+      resources:
+        limits:
+          memory: 1g
 volumes:
   db_data:

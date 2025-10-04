@@ -18,7 +18,7 @@ class Project(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     goal: Mapped[str | None] = mapped_column(Text, nullable=True)
     direction: Mapped[str | None] = mapped_column(Text, nullable=True)
-    repository_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    repository: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -106,6 +106,7 @@ class Task(Base):
         nullable=False,
     )
     lock_version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    external_id: Mapped[str | None] = mapped_column(String(255), nullable=True, unique=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -115,6 +116,7 @@ class Task(Base):
     children = relationship("Task", back_populates="parent", cascade="all, delete-orphan")
     bugs = relationship("Bug", back_populates="task")
     events = relationship("EventLog", back_populates="task")
+    attachments = relationship("Attachment", back_populates="task", cascade="all, delete-orphan")
 
     __table_args__ = (
         CheckConstraint("effort_estimate >= 0", name="task_effort_estimate_non_negative"),
@@ -180,6 +182,18 @@ class EventLog(Base):
     project = relationship("Project", back_populates="events")
     milestone = relationship("Milestone", back_populates="events")
     task = relationship("Task", back_populates="events")
+
+
+class Attachment(Base):
+    __tablename__ = "attachments"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    task_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("tasks.id", ondelete="CASCADE"), nullable=False)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    path: Mapped[str] = mapped_column(String(1024), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+
+    task = relationship("Task", back_populates="attachments")
 
 
 class ContextSnapshot(Base):

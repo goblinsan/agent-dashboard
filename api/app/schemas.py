@@ -12,9 +12,9 @@ class ProjectBase(BaseModel):
     goal: Optional[str] = None
     direction: Optional[str] = None
     parent_id: Optional[UUID] = Field(default=None, description="Parent project id if nested")
-    repository_path: Optional[str] = Field(
+    repository: Optional[str] = Field(
         default=None,
-        description="Filesystem path to the project's git repository",
+        description="Remote git repository URL for the project",
     )
 
 
@@ -35,7 +35,7 @@ class ProjectUpdate(BaseModel):
     goal: Optional[str] = None
     direction: Optional[str] = None
     parent_id: Optional[UUID] = None
-    repository_path: Optional[str] = None
+    repository: Optional[str] = None
 
 
 class MilestoneBase(BaseModel):
@@ -82,10 +82,18 @@ class TaskBase(BaseModel):
     risk_level: str = "low"
     severity: str = "minor"
     status: str = "not_started"
+    external_id: Optional[str] = None
 
 
 class TaskCreate(TaskBase):
-    pass
+    # allow milestone_id to be optional for automated flows that supply milestone_slug
+    milestone_id: Optional[UUID] = None
+    # Extended fields for automated task creation flows
+    project_slug: Optional[str] = None
+    milestone_slug: Optional[str] = None
+    parent_task_external_id: Optional[str] = None
+    attachments: Optional[list["AttachmentCreate"]] = None
+    options: Optional[dict] = None
 
 
 class TaskRead(TaskBase):
@@ -93,6 +101,7 @@ class TaskRead(TaskBase):
     lock_version: int
     created_at: datetime
     updated_at: datetime
+    attachments: Optional[list["AttachmentRead"]] = None
 
     model_config = {"from_attributes": True}
 
@@ -250,6 +259,22 @@ class ContextSnapshotRead(ContextSnapshotBase):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class AttachmentRead(BaseModel):
+    id: UUID
+    task_id: UUID
+    name: str
+    path: str
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class AttachmentCreate(BaseModel):
+    name: str
+    content_base64: str
+
 
 class ContextIndexRead(BaseModel):
     repo_id: str

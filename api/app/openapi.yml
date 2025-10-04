@@ -20,6 +20,22 @@ paths:
                   type: object
                 type: object
                 title: Response List Schemas V1  Well Known Schemas Get
+  /v1/.well-known/openapi:
+    get:
+      tags:
+      - discovery
+      summary: Discover Openapi
+      operationId: discover_openapi_v1__well_known_openapi_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties:
+                  type: string
+                type: object
+                title: Response Discover Openapi V1  Well Known Openapi Get
   /v1/projects:
     post:
       tags:
@@ -210,6 +226,64 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ProjectStatusSummary'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/projects/{project_id}/milestones:
+    get:
+      tags:
+      - projects
+      summary: Find Milestones By Slug Or Name
+      description: 'Resolve milestones for a project by slug or name.
+
+
+        Returns JSON: {"ok": true, "milestones": [ {id, slug, name, start_date, due_date,
+        url}, ... ]}'
+      operationId: find_milestones_by_slug_or_name_v1_projects__project_id__milestones_get
+      parameters:
+      - name: project_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Project Id
+      - name: slug
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Slug
+      - name: name
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Name
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 10
+          title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Find Milestones By Slug Or Name V1 Projects  Project
+                  Id  Milestones Get
         '422':
           description: Validation Error
           content:
@@ -847,8 +921,65 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /context/repos:
+    get:
+      tags:
+      - context
+      summary: List Repo Ids
+      operationId: list_repo_ids_context_repos_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  type: string
+                type: array
+                title: Response List Repo Ids Context Repos Get
 components:
   schemas:
+    AttachmentCreate:
+      properties:
+        name:
+          type: string
+          title: Name
+        content_base64:
+          type: string
+          title: Content Base64
+      type: object
+      required:
+      - name
+      - content_base64
+      title: AttachmentCreate
+    AttachmentRead:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        task_id:
+          type: string
+          format: uuid
+          title: Task Id
+        name:
+          type: string
+          title: Name
+        path:
+          type: string
+          title: Path
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+      type: object
+      required:
+      - id
+      - task_id
+      - name
+      - path
+      - created_at
+      title: AttachmentRead
     BugCreate:
       properties:
         project_id:
@@ -1391,12 +1522,12 @@ components:
           - type: 'null'
           title: Parent Id
           description: Parent project id if nested
-        repository_path:
+        repository:
           anyOf:
           - type: string
           - type: 'null'
-          title: Repository Path
-          description: Filesystem path to the project's git repository
+          title: Repository
+          description: Remote git repository URL for the project
       type: object
       required:
       - name
@@ -1486,12 +1617,12 @@ components:
           - type: 'null'
           title: Parent Id
           description: Parent project id if nested
-        repository_path:
+        repository:
           anyOf:
           - type: string
           - type: 'null'
-          title: Repository Path
-          description: Filesystem path to the project's git repository
+          title: Repository
+          description: Remote git repository URL for the project
         id:
           type: string
           format: uuid
@@ -1613,18 +1744,20 @@ components:
             format: uuid
           - type: 'null'
           title: Parent Id
-        repository_path:
+        repository:
           anyOf:
           - type: string
           - type: 'null'
-          title: Repository Path
+          title: Repository
       type: object
       title: ProjectUpdate
     TaskCreate:
       properties:
         milestone_id:
-          type: string
-          format: uuid
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
           title: Milestone Id
         phase_id:
           anyOf:
@@ -1685,9 +1818,41 @@ components:
           type: string
           title: Status
           default: not_started
+        external_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: External Id
+        project_slug:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Project Slug
+        milestone_slug:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Milestone Slug
+        parent_task_external_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Parent Task External Id
+        attachments:
+          anyOf:
+          - items:
+              $ref: '#/components/schemas/AttachmentCreate'
+            type: array
+          - type: 'null'
+          title: Attachments
+        options:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Options
       type: object
       required:
-      - milestone_id
       - title
       title: TaskCreate
     TaskPatch:
@@ -1832,6 +1997,11 @@ components:
           type: string
           title: Status
           default: not_started
+        external_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: External Id
         id:
           type: string
           format: uuid
@@ -1847,6 +2017,13 @@ components:
           type: string
           format: date-time
           title: Updated At
+        attachments:
+          anyOf:
+          - items:
+              $ref: '#/components/schemas/AttachmentRead'
+            type: array
+          - type: 'null'
+          title: Attachments
       type: object
       required:
       - milestone_id

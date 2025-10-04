@@ -17,6 +17,18 @@ from app.schemas import (
     ProjectUpdate,
 )
 from app.project_services import compute_project_status, select_next_actions, generate_project_summary
+from app.models import Milestone
+from typing import List
+
+
+def _slugify(text: str) -> str:
+    # simple slugify: lower, replace non-alphanum with '-', collapse dashes
+    import re
+
+    s = text.lower()
+    s = re.sub(r"[^a-z0-9]+", "-", s)
+    s = re.sub(r"-+", "-", s).strip("-")
+    return s
 
 router = APIRouter(prefix="/v1/projects", tags=["projects"])
 
@@ -123,3 +135,61 @@ def get_project_status_summary(project_id: UUID, db: Session = Depends(get_sessi
         summary=summary.summary,
         generated_at=summary.generated_at,
     )
+
+
+@router.get("/{project_id}/milestones")
+def find_milestones_by_slug_or_name(
+    project_id: UUID,
+    slug: Optional[str] = None,
+    name: Optional[str] = None,
+    limit: int = 10,
+    db: Session = Depends(get_session),
+) -> dict:
+    """Resolve milestones for a project by slug or name.
+
+    Returns JSON: {"ok": true, "milestones": [ {id, slug, name, start_date, due_date, url}, ... ]}
+    """
+    project = db.get(Project, project_id)
+    if project is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+
+    query = db.query(Milestone).filter(Milestone.project_id == project_id)
+    milestones: List[Milestone] = query.order_by(Milestone.created_at.asc()).all()
+
+    results: List[dict] = []
+    for m in milestones:
+        mslug = _slugify(m.name or "")
+        if slug:
+            if mslug == slug.lower():
+                results.append({
+                    "id": str(m.id),
+                    "slug": mslug,
+                    "name": m.name,
+                    "start_date": m.start_date.isoformat() if m.start_date else None,
+                    "due_date": m.due_date.isoformat() if m.due_date else None,
+                    "url": f"/v1/milestones/{m.id}",
+                })
+        elif name:
+            if (m.name or "").lower().find(name.lower()) != -1:
+                results.append({
+                    "id": str(m.id),
+                    "slug": mslug,
+                    "name": m.name,
+                    "start_date": m.start_date.isoformat() if m.start_date else None,
+                    "due_date": m.due_date.isoformat() if m.due_date else None,
+                    "url": f"/v1/milestones/{m.id}",
+                })
+        else:
+            results.append({
+                "id": str(m.id),
+                "slug": mslug,
+                "name": m.name,
+                "start_date": m.start_date.isoformat() if m.start_date else None,
+                "due_date": m.due_date.isoformat() if m.due_date else None,
+                "url": f"/v1/milestones/{m.id}",
+            })
+
+    # apply limit
+    results = results[: max(1, min(limit, len(results)))] if results else []
+
+    return {"ok": True, "milestones": results}
