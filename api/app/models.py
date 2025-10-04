@@ -28,6 +28,7 @@ class Project(Base):
     personas = relationship("ProjectPersona", back_populates="project", cascade="all, delete-orphan")
     bugs = relationship("Bug", back_populates="project", cascade="all, delete-orphan")
     events = relationship("EventLog", back_populates="project", cascade="all, delete-orphan")
+    tasks = relationship("Task", back_populates="project", cascade="all, delete-orphan")
 
 
 class Milestone(Base):
@@ -105,13 +106,18 @@ class Task(Base):
         default="not_started",
         nullable=False,
     )
-    lock_version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
-    external_id: Mapped[str | None] = mapped_column(String(255), nullable=True, unique=True)
+    # denormalized project_id for easier lookup and per-project uniqueness
+    project_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+
+    lock_version: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # external_id uniqueness is enforced per-project via a DB index (created in migrations)
+    external_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
 
     milestone = relationship("Milestone", back_populates="tasks")
     phase = relationship("Phase", back_populates="tasks")
+    project = relationship("Project", back_populates="tasks")
     parent = relationship("Task", remote_side=[id], back_populates="children")
     children = relationship("Task", back_populates="parent", cascade="all, delete-orphan")
     bugs = relationship("Bug", back_populates="task")
