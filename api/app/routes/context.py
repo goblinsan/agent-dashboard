@@ -4,7 +4,7 @@ from typing import Optional
 from app.db import get_session
 from app.services.context_repo import ContextRepoService
 from app.schemas import ContextSnapshotCreate, ContextSnapshotRead
-from app.models import ContextSnapshot
+from app.models import ContextSnapshot, ContextIndex
 
 router = APIRouter(prefix="/context", tags=["context"])
 
@@ -36,3 +36,8 @@ def list_context_snapshots(
 ) -> list[ContextSnapshotRead]:
     query = db.query(ContextSnapshot).filter_by(repo_id=repo_id).order_by(ContextSnapshot.created_at.desc()).limit(limit)
     return query.all()
+
+@router.get("/repos", response_model=list[str])
+def list_repo_ids(db: Session = Depends(get_session)):
+    repo_ids = db.query(ContextIndex.repo_id).all()
+    return [r[0] for r in repo_ids]
