@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Optional, Any
+from datetime import datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status, Response
@@ -69,8 +70,8 @@ def _ensure_parent_task(db: Session, parent_task_id: Optional[UUID]) -> None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Parent task not found")
 
 
-@router.post("", response_model=TaskRead, status_code=status.HTTP_201_CREATED)
-def create_task(payload: TaskCreate, db: Session = Depends(get_session)) -> TaskRead:
+@router.post("", response_model=TaskRead)
+def create_task(payload: TaskCreate, response: Response, db: Session = Depends(get_session)) -> TaskRead:
     create_data = payload.model_dump()
 
     # Resolve project by slug if provided
@@ -80,6 +81,7 @@ def create_task(payload: TaskCreate, db: Session = Depends(get_session)) -> Task
         if proj is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found by slug")
         project_id = proj.id
+    create_data["project_id"] = project_id
 
     # Resolve milestone by slug (optionally create)
     milestone_id = create_data.get("milestone_id")
@@ -108,10 +110,21 @@ def create_task(payload: TaskCreate, db: Session = Depends(get_session)) -> Task
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Parent task not found by external_id")
         parent_task_id = parent.id
 
-    # idempotency: if external_id provided and exists, return existing (race-safe)
+    # idempotency: if external_id provided, attempt transactional lookup per-project
+    created = False
     if create_data.get("external_id"):
-        existing = db.query(Task).filter(Task.external_id == create_data["external_id"]).first()
+        if not project_id:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="project_id or project_slug required when external_id is provided")
+        # SELECT FOR UPDATE to prevent races
+        existing = (
+            db.query(Task)
+            .with_for_update()
+            .filter(Task.external_id == create_data["external_id"], Task.project_id == project_id)
+            .first()
+        )
         if existing:
+            response.status_code = status.HTTP_200_OK
+            response.headers["Location"] = f"/v1/tasks/{existing.id}"
             return TaskRead.model_validate(existing)
 
     # validations
@@ -132,16 +145,25 @@ def create_task(payload: TaskCreate, db: Session = Depends(get_session)) -> Task
     db.add(task)
     try:
         db.commit()
-    except sa_exc.IntegrityError:
-        # likely a concurrent insert with same external_id — return existing
+    except sa_exc.IntegrityError as e:
+        # possible uniqueness violation across projects or concurrent insert
         db.rollback()
-        if create_data.get("external_id"):
-            existing = db.query(Task).filter(Task.external_id == create_data["external_id"]).first()
+        # if the conflict was external_id within same project, return 200 existing
+        if create_data.get("external_id") and project_id:
+            existing = (
+                db.query(Task)
+                .filter(Task.external_id == create_data["external_id"], Task.project_id == project_id)
+                .first()
+            )
             if existing:
+                response.status_code = status.HTTP_200_OK
+                response.headers["Location"] = f"/v1/tasks/{existing.id}"
                 return TaskRead.model_validate(existing)
-        raise
+        # otherwise raise conflict
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Conflict creating task")
 
     db.refresh(task)
+    created = True
 
     # handle attachments (store files and create Attachment rows)
     attachments = create_data.get("attachments") or []
@@ -162,24 +184,39 @@ def create_task(payload: TaskCreate, db: Session = Depends(get_session)) -> Task
     if attachments:
         db.commit()
         db.refresh(task)
+    # set response code and Location header
+    response.status_code = status.HTTP_201_CREATED if created else status.HTTP_200_OK
+    response.headers["Location"] = f"/v1/tasks/{task.id}"
+    response.headers["ETag"] = _weak_etag_for(task)
     return _as_task_read(task)
 
 
 @router.get("", response_model=list[TaskRead])
 def list_tasks(
-    milestone_id: Optional[UUID] = None,
+    external_id: Optional[str] = None,
     project_id: Optional[UUID] = None,
-    phase_id: Optional[UUID] = None,
+    project_slug: Optional[str] = None,
+    milestone_id: Optional[UUID] = None,
+    created_after: Optional[datetime] = None,
+    limit: int = 100,
+    offset: int = 0,
     db: Session = Depends(get_session),
 ) -> list[TaskRead]:
     query = db.query(Task)
+    if project_slug and not project_id:
+        proj = _resolve_project_by_slug(db, project_slug)
+        if proj is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found by slug")
+        project_id = proj.id
     if project_id:
-        query = query.join(Milestone).filter(Milestone.project_id == project_id)
+        query = query.filter(Task.project_id == project_id)
+    if external_id:
+        query = query.filter(Task.external_id == external_id)
     if milestone_id:
         query = query.filter(Task.milestone_id == milestone_id)
-    if phase_id:
-        query = query.filter(Task.phase_id == phase_id)
-    tasks = query.order_by(Task.created_at.asc()).all()
+    if created_after:
+        query = query.filter(Task.created_at > created_after)
+    tasks = query.order_by(Task.created_at.asc()).limit(limit).offset(offset).all()
     return [_as_task_read(task) for task in tasks]
 
 
@@ -197,7 +234,8 @@ def update_task(task_id: UUID, payload: TaskPatch, db: Session = Depends(get_ses
     if task is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
 
-    if task.lock_version != payload.lock_version:
+    # optimistic locking: if lock_version provided and mismatches, return 409
+    if getattr(payload, "lock_version", None) is not None and task.lock_version != payload.lock_version:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Task has been modified by another update")
 
     update_data = payload.model_dump(exclude_unset=True)

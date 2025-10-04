@@ -234,6 +234,7 @@ def _upsert_task(session: Session, milestone: Milestone, phase: Phase, title: st
 
     task = Task(
         milestone_id=milestone.id,
+        project_id=milestone.project_id,
         phase_id=phase.id,
         title=title,
         status=status,

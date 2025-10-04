@@ -43,6 +43,7 @@ class MilestoneBase(BaseModel):
     slug: Optional[str] = None
     name: str
     description: Optional[str] = None
+    slug: Optional[str] = None
     start_date: Optional[date] = None
     due_date: Optional[date] = None
     status: str = "not_started"
@@ -70,6 +71,7 @@ class MilestoneUpdate(BaseModel):
 
 
 class TaskBase(BaseModel):
+    project_id: UUID
     milestone_id: UUID
     phase_id: Optional[UUID] = None
     parent_task_id: Optional[UUID] = None
@@ -110,6 +112,7 @@ class TaskRead(TaskBase):
     created_at: datetime
     updated_at: datetime
     attachments: Optional[list["AttachmentRead"]] = None
+    milestone_slug: Optional[str] = None
 
     model_config = {"from_attributes": True}
 

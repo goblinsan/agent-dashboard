@@ -9,6 +9,9 @@ from sqlalchemy.orm import Session
 from app.db import get_session
 from app.models import Milestone, Project
 from app.schemas import MilestoneCreate, MilestoneRead, MilestoneUpdate
+import re
+import sqlalchemy as sa
+from sqlalchemy import exc as sa_exc
 
 router = APIRouter(prefix="/v1/milestones", tags=["milestones"])
 
@@ -19,9 +22,21 @@ def create_milestone(payload: MilestoneCreate, db: Session = Depends(get_session
     if project is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Project not found")
 
-    milestone = Milestone(**payload.model_dump())
+    data = payload.model_dump()
+    # normalize slug from name if not provided
+    slug = data.get("slug")
+    if not slug:
+        slug = re.sub(r"[^a-z0-9]+", "-", data.get("name", "").lower())
+    data["slug"] = slug
+
+    milestone = Milestone(**data)
     db.add(milestone)
-    db.commit()
+    try:
+        db.commit()
+    except sa_exc.IntegrityError:
+        db.rollback()
+        # assume conflict on project_id+slug
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Milestone slug already exists for project")
     db.refresh(milestone)
     return MilestoneRead.model_validate(milestone)
 

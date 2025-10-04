@@ -418,7 +418,7 @@ paths:
             schema:
               $ref: '#/components/schemas/TaskCreate'
       responses:
-        '201':
+        '200':
           description: Successful Response
           content:
             application/json:
@@ -436,15 +436,14 @@ paths:
       summary: List Tasks
       operationId: list_tasks_v1_tasks_get
       parameters:
-      - name: milestone_id
+      - name: external_id
         in: query
         required: false
         schema:
           anyOf:
           - type: string
-            format: uuid
           - type: 'null'
-          title: Milestone Id
+          title: External Id
       - name: project_id
         in: query
         required: false
@@ -454,7 +453,15 @@ paths:
             format: uuid
           - type: 'null'
           title: Project Id
-      - name: phase_id
+      - name: project_slug
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Project Slug
+      - name: milestone_id
         in: query
         required: false
         schema:
@@ -462,7 +469,30 @@ paths:
           - type: string
             format: uuid
           - type: 'null'
-          title: Phase Id
+          title: Milestone Id
+      - name: created_after
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Created After
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 100
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 0
+          title: Offset
       responses:
         '200':
           description: Successful Response
@@ -1311,6 +1341,11 @@ components:
           - type: string
           - type: 'null'
           title: Description
+        slug:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Slug
         start_date:
           anyOf:
           - type: string
@@ -1346,6 +1381,11 @@ components:
           - type: string
           - type: 'null'
           title: Description
+        slug:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Slug
         start_date:
           anyOf:
           - type: string
@@ -1753,6 +1793,10 @@ components:
       title: ProjectUpdate
     TaskCreate:
       properties:
+        project_id:
+          type: string
+          format: uuid
+          title: Project Id
         milestone_id:
           anyOf:
           - type: string
@@ -1853,6 +1897,7 @@ components:
           title: Options
       type: object
       required:
+      - project_id
       - title
       title: TaskCreate
     TaskPatch:
@@ -1934,6 +1979,10 @@ components:
       title: TaskPatch
     TaskRead:
       properties:
+        project_id:
+          type: string
+          format: uuid
+          title: Project Id
         milestone_id:
           type: string
           format: uuid
@@ -2024,8 +2073,14 @@ components:
             type: array
           - type: 'null'
           title: Attachments
+        milestone_slug:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Milestone Slug
       type: object
       required:
+      - project_id
       - milestone_id
       - title
       - id
