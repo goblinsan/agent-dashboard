@@ -248,3 +248,14 @@ def update_task(task_id: UUID, payload: TaskPatch, db: Session = Depends(get_ses
     db.commit()
     db.refresh(task)
     return TaskRead.model_validate(task)
+
+
+@router.delete("/{task_id}", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
+def delete_task(task_id: UUID, db: Session = Depends(get_session)) -> Response:
+    """Delete a task by id. Returns 204 on success or 404 if not found."""
+    task = db.get(Task, task_id)
+    if task is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
+    db.delete(task)
+    db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
