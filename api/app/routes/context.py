@@ -37,6 +37,20 @@ def list_context_snapshots(
     query = db.query(ContextSnapshot).filter_by(repo_id=repo_id).order_by(ContextSnapshot.created_at.desc()).limit(limit)
     return query.all()
 
+@router.get("/by-workflow", response_model=list[ContextSnapshotRead])
+def get_context_by_workflow(
+    workflow_id: str = Query(...),
+    limit: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_session)
+) -> list[ContextSnapshotRead]:
+    """Get context snapshots by workflow_id, ordered by most recent first."""
+    query = (db.query(ContextSnapshot)
+             .filter_by(workflow_id=workflow_id)
+             .order_by(ContextSnapshot.created_at.desc())
+             .limit(limit))
+    snapshots = query.all()
+    return [ContextSnapshotRead.model_validate(snapshot) for snapshot in snapshots]
+
 @router.get("/repos", response_model=list[str])
 def list_repo_ids(db: Session = Depends(get_session)):
     repo_ids = db.query(ContextIndex.repo_id).all()

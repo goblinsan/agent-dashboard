@@ -359,6 +359,7 @@ def upsert_task(payload: TaskUpsertPayload, response: Response, db: Session = De
     return TaskRead.model_validate(task)
 
 
+<<<<<<< HEAD
 @router.get("/resolve", response_model=TaskRead)
 def resolve_task(
     external_id: Optional[str] = None,
@@ -479,3 +480,14 @@ def batch_update_status(items: list[BatchStatusItem], db: Session = Depends(get_
 
     db.commit()
     return results
+=======
+@router.delete("/{task_id}", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
+def delete_task(task_id: UUID, db: Session = Depends(get_session)) -> Response:
+    """Delete a task by id. Returns 204 on success or 404 if not found."""
+    task = db.get(Task, task_id)
+    if task is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
+    db.delete(task)
+    db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+>>>>>>> e310b5a (delete task endpoint)
