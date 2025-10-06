@@ -35,6 +35,7 @@ class ProjectUpdate(BaseModel):
 
 class MilestoneBase(BaseModel):
     project_id: UUID
+    slug: Optional[str] = None
     name: str
     description: Optional[str] = None
     start_date: Optional[date] = None
@@ -55,6 +56,7 @@ class MilestoneRead(MilestoneBase):
 
 
 class MilestoneUpdate(BaseModel):
+    slug: Optional[str] = None
     name: Optional[str] = None
     description: Optional[str] = None
     status: Optional[str] = None
@@ -66,9 +68,12 @@ class TaskBase(BaseModel):
     milestone_id: UUID
     phase_id: Optional[UUID] = None
     parent_task_id: Optional[UUID] = None
+    external_id: Optional[str] = None
+    slug: Optional[str] = None
     title: str
     description: Optional[str] = None
     owner: Optional[str] = None
+    assignee_persona: Optional[str] = None
     persona_required: Optional[str] = None
     acceptance_criteria: Optional[str] = None
     effort_estimate: float = 0
@@ -85,6 +90,9 @@ class TaskCreate(TaskBase):
 
 class TaskRead(TaskBase):
     id: UUID
+    # Convenience denormalized fields
+    project_id: Optional[UUID] = None
+    milestone_slug: Optional[str] = None
     lock_version: int
     created_at: datetime
     updated_at: datetime
@@ -96,6 +104,7 @@ class TaskPatch(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
     owner: Optional[str] = None
+    assignee_persona: Optional[str] = None
     persona_required: Optional[str] = None
     acceptance_criteria: Optional[str] = None
     effort_estimate: Optional[float] = None
@@ -107,6 +116,43 @@ class TaskPatch(BaseModel):
     phase_id: Optional[UUID] = None
     parent_task_id: Optional[UUID] = None
     lock_version: int = Field(..., description="Current lock version for optimistic concurrency")
+
+
+class TaskUpsertPayload(BaseModel):
+    external_id: Optional[str] = None
+    project_id: Optional[UUID] = None
+    project_slug: Optional[str] = None
+    milestone_id: Optional[UUID] = None
+    milestone_slug: Optional[str] = None
+    parent_task_id: Optional[UUID] = None
+    title: str
+    description: Optional[str] = None
+    assignee_persona: Optional[str] = None
+    effort_estimate: Optional[float] = None
+    priority_score: Optional[float] = None
+    slug: Optional[str] = None
+    options: Optional[dict] = None
+
+
+class TaskStatusUpdate(BaseModel):
+    status: str
+    lock_version: Optional[int] = None
+
+
+class BatchStatusItem(BaseModel):
+    id: Optional[UUID] = None
+    external_id: Optional[str] = None
+    status: str
+    lock_version: Optional[int] = None
+
+
+class BatchStatusResult(BaseModel):
+    ok: bool
+    id: Optional[UUID] = None
+    external_id: Optional[str] = None
+    status: int
+    lock_version: Optional[int] = None
+    error: Optional[str] = None
 
 class ProjectStatusMilestone(BaseModel):
     milestone_id: UUID

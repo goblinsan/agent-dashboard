@@ -123,3 +123,36 @@ def get_project_status_summary(project_id: UUID, db: Session = Depends(get_sessi
         summary=summary.summary,
         generated_at=summary.generated_at,
     )
+
+
+# Upsert milestone by slug within a project: POST /v1/projects/{project_id}/milestones:upsert
+from app.schemas import MilestoneUpdate, MilestoneRead
+from app.models import Milestone
+
+
+@router.post("/{project_id}/milestones:upsert", response_model=MilestoneRead)
+def upsert_milestone(project_id: UUID, payload: MilestoneUpdate, db: Session = Depends(get_session)) -> MilestoneRead:
+    project = db.get(Project, project_id)
+    if project is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    data = payload.model_dump(exclude_unset=True)
+    slug = data.get("slug")
+    if not slug:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="slug required")
+    milestone = db.query(Milestone).filter(Milestone.project_id == project_id, Milestone.slug == slug).first()
+    if milestone is None:
+        milestone = Milestone(project_id=project_id, slug=slug, name=data.get("name") or slug)
+        for f in ["start_date", "due_date"]:
+            if f in data:
+                setattr(milestone, f, data[f])
+        db.add(milestone)
+        db.commit()
+        db.refresh(milestone)
+        return MilestoneRead.model_validate(milestone)
+    else:
+        for f in ["name", "start_date", "due_date"]:
+            if f in data and data[f] is not None:
+                setattr(milestone, f, data[f])
+        db.commit()
+        db.refresh(milestone)
+        return MilestoneRead.model_validate(milestone)
