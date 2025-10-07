@@ -20,26 +20,42 @@ depends_on = None
 def upgrade() -> None:
     conn = op.get_bind()
     inspector = sa.inspect(conn)
-    cols = [c['name'] for c in inspector.get_columns('milestones')]
+    # Bail out entirely if table doesn't exist (e.g., partial environments)
+    try:
+        cols = [c['name'] for c in inspector.get_columns('milestones')]
+    except Exception:
+        return
     if 'slug' not in cols:
         # add slug column (nullable) to milestones
         op.add_column('milestones', sa.Column('slug', sa.String(length=255), nullable=True))
 
     # create unique index on project_id + slug if it doesn't already exist
     existing_indexes = {idx['name'] for idx in inspector.get_indexes('milestones')}
-    idx_name = op.f('ux_milestones_project_id_slug')
-    if idx_name not in existing_indexes:
-        op.create_index(idx_name, 'milestones', ['project_id', 'slug'], unique=True)
+    idx_names = {op.f('ux_milestones_project_id_slug'), 'ux_milestones_project_slug'}
+    if not (idx_names & existing_indexes):
+        op.create_index(op.f('ux_milestones_project_id_slug'), 'milestones', ['project_id', 'slug'], unique=True)
 
 
 def downgrade() -> None:
     conn = op.get_bind()
     inspector = sa.inspect(conn)
-    existing_indexes = {idx['name'] for idx in inspector.get_indexes('milestones')}
-    idx_name = op.f('ux_milestones_project_id_slug')
-    if idx_name in existing_indexes:
-        op.drop_index(idx_name, table_name='milestones')
+    try:
+        existing_indexes = {idx['name'] for idx in inspector.get_indexes('milestones')}
+    except Exception:
+        existing_indexes = set()
+    for idx_name in (op.f('ux_milestones_project_id_slug'), 'ux_milestones_project_slug'):
+        if idx_name in existing_indexes:
+            try:
+                op.drop_index(idx_name, table_name='milestones')
+            except Exception:
+                pass
 
-    cols = [c['name'] for c in inspector.get_columns('milestones')]
+    try:
+        cols = [c['name'] for c in inspector.get_columns('milestones')]
+    except Exception:
+        cols = []
     if 'slug' in cols:
-        op.drop_column('milestones', 'slug')
+        try:
+            op.drop_column('milestones', 'slug')
+        except Exception:
+            pass

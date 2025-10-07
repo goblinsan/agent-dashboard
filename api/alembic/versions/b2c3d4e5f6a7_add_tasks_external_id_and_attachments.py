@@ -1,7 +1,7 @@
 """Add external_id to tasks and create attachments table
 
 Revision ID: b2c3d4e5f6a7
-Revises: a1b2c3d4e5f6
+Revises: 5c2b1b9e3a7f
 Create Date: 2025-10-04 00:30:00.000000
 
 """
@@ -13,7 +13,7 @@ from sqlalchemy.dialects import postgresql
 
 
 revision = "b2c3d4e5f6a7"
-down_revision = "a1b2c3d4e5f6"
+down_revision = "5c2b1b9e3a7f"
 branch_labels = None
 depends_on = None
 
