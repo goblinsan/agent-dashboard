@@ -3,11 +3,11 @@ from __future__ import annotations
 from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
 from app.db import get_session
-from app.models import Project
+from app.models import Project, Milestone
 from app.schemas import (
     ProjectCreate,
     ProjectRead,
@@ -15,9 +15,10 @@ from app.schemas import (
     ProjectNextActions,
     ProjectStatusSummary,
     ProjectUpdate,
+    MilestoneUpdate,
+    MilestoneRead,
 )
 from app.project_services import compute_project_status, select_next_actions, generate_project_summary
-from app.models import Milestone
 from typing import List
 
 
@@ -136,7 +137,6 @@ def get_project_status_summary(project_id: UUID, db: Session = Depends(get_sessi
         generated_at=summary.generated_at,
     )
 
-
 @router.get("/{project_id}/milestones")
 def find_milestones_by_slug_or_name(
     project_id: UUID,
@@ -158,7 +158,8 @@ def find_milestones_by_slug_or_name(
 
     results: List[dict] = []
     for m in milestones:
-        mslug = _slugify(m.name or "")
+        # Prefer stored slug, fallback to slugified name for legacy records
+        mslug = (m.slug or _slugify(m.name or ""))
         if slug:
             if mslug == slug.lower():
                 results.append({
@@ -193,3 +194,39 @@ def find_milestones_by_slug_or_name(
     results = results[: max(1, min(limit, len(results)))] if results else []
 
     return {"ok": True, "milestones": results}
+
+# Upsert milestone by slug within a project: POST /v1/projects/{project_id}/milestones:upsert
+@router.post("/{project_id}/milestones:upsert", response_model=MilestoneRead)
+def upsert_milestone(
+    project_id: UUID,
+    payload: MilestoneUpdate,
+    db: Session = Depends(get_session),
+    response: Response = None,
+) -> MilestoneRead:
+    project = db.get(Project, project_id)
+    if project is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    data = payload.model_dump(exclude_unset=True)
+    slug = data.get("slug")
+    if not slug:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="slug required")
+    milestone = db.query(Milestone).filter(Milestone.project_id == project_id, Milestone.slug == slug).first()
+    if milestone is None:
+        milestone = Milestone(project_id=project_id, slug=slug, name=data.get("name") or slug)
+        for f in ["start_date", "due_date"]:
+            if f in data:
+                setattr(milestone, f, data[f])
+        db.add(milestone)
+        db.commit()
+        db.refresh(milestone)
+        if response is not None:
+            response.status_code = status.HTTP_201_CREATED
+            response.headers["Location"] = f"/v1/milestones/{milestone.id}"
+        return MilestoneRead.model_validate(milestone)
+    else:
+        for f in ["name", "start_date", "due_date"]:
+            if f in data and data[f] is not None:
+                setattr(milestone, f, data[f])
+        db.commit()
+        db.refresh(milestone)
+        return MilestoneRead.model_validate(milestone)

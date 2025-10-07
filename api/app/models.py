@@ -36,6 +36,8 @@ class Milestone(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     project_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    # Stable identifier within a project for coordinator-friendly addressing (optional)
+    slug: Mapped[str | None] = mapped_column(String(128), nullable=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     slug: Mapped[str | None] = mapped_column(String(255), nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -84,9 +86,15 @@ class Task(Base):
     milestone_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("milestones.id", ondelete="CASCADE"), nullable=False)
     phase_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("phases.id", ondelete="SET NULL"), nullable=True)
     parent_task_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("tasks.id", ondelete="CASCADE"), nullable=True)
+    # External system identifier for upserts/resolve
+    external_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Stable slug within a milestone for natural key fallback
+    slug: Mapped[str | None] = mapped_column(String(128), nullable=True)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     owner: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Preferred assignee persona key (coordinator-friendly)
+    assignee_persona: Mapped[str | None] = mapped_column(String(255), nullable=True)
     persona_required: Mapped[str | None] = mapped_column(String(255), nullable=True)
     acceptance_criteria: Mapped[str | None] = mapped_column(Text, nullable=True)
     effort_estimate: Mapped[float] = mapped_column(Numeric(10, 2), default=0)
@@ -103,7 +111,7 @@ class Task(Base):
         nullable=False,
     )
     status: Mapped[str] = mapped_column(
-        Enum("not_started", "in_progress", "blocked", "in_review", "done", name="task_status"),
+        Enum("not_started", "in_progress", "blocked", "in_review", "done", "on_hold", name="task_status"),
         default="not_started",
         nullable=False,
     )
@@ -128,6 +136,8 @@ class Task(Base):
     __table_args__ = (
         CheckConstraint("effort_estimate >= 0", name="task_effort_estimate_non_negative"),
         CheckConstraint("effort_spent >= 0", name="task_effort_spent_non_negative"),
+        # Unique external_id across all tasks when provided
+        # Note: enforced via migration with conditional unique index if needed
     )
 
 

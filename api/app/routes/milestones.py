@@ -41,6 +41,9 @@ def create_milestone(payload: MilestoneCreate, db: Session = Depends(get_session
     return MilestoneRead.model_validate(milestone)
 
 
+    
+
+
 @router.get("", response_model=list[MilestoneRead])
 def list_milestones(project_id: Optional[UUID] = None, db: Session = Depends(get_session)) -> list[MilestoneRead]:
     query = db.query(Milestone)
